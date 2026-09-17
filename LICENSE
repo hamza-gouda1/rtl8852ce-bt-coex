@@ -1,0 +1,11 @@
+Copyright (C) 2026 Hamza Gouda
+
+The kernel patches in patches/ are modifications of the Linux kernel rtw89
+driver and are licensed under GPL-2.0-only OR BSD-3-Clause, matching the
+upstream driver's dual license (see the SPDX headers in the patched files).
+
+The scripts and documentation in this repository are licensed under
+GPL-2.0-only.
+
+Full license text: https://www.gnu.org/licenses/old-licenses/gpl-2.0.txt
+SPDX-License-Identifier: GPL-2.0-only OR BSD-3-Clause

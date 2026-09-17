@@ -1,0 +1,43 @@
+From: Hamza Gouda <hraafat357@gmail.com>
+Subject: [PATCH] rtw89: btc policy override params
+
+--- a/drivers/net/wireless/realtek/rtw89/coex.c
++++ b/drivers/net/wireless/realtek/rtw89/coex.c
+@@ -4889,6 +4889,17 @@
+ 	_set_policy(rtwdev, policy_type, BTC_ACT_BT_HID);
+ }
+ 
++static int _btc_policy_override = -1;
++module_param_named(btc_policy_override, _btc_policy_override, int, 0644);
++MODULE_PARM_DESC(btc_policy_override,
++		 "Force coex policy type for the BT A2DP action (-1 = auto). "
++		 "Values are BTC_CXP_* enums, e.g. 1282=AUTO_TD20B1, 1283=AUTO_TDW1B1, 0=OFF_BT");
++
++static int _btc_w1_dur = 20;
++module_param_named(btc_w1_dur_ms, _btc_w1_dur, int, 0644);
++MODULE_PARM_DESC(btc_w1_dur_ms,
++		 "WLAN slot duration (ms) used by TDW1B1 user-define policies (1-100)");
++
+ static void _action_bt_a2dp(struct rtw89_dev *rtwdev)
+ {
+ 	struct rtw89_btc *btc = &rtwdev->btc;
+@@ -4896,8 +4907,16 @@
+ 
+ 	_set_ant(rtwdev, NM_EXEC, BTC_PHY_ALL, BTC_ANT_W2G);
+ 
+-	dm->slot_dur[CXST_W1] = 20;
++	if (_btc_w1_dur > 0 && _btc_w1_dur <= 100)
++		dm->slot_dur[CXST_W1] = _btc_w1_dur;
++	else
++		dm->slot_dur[CXST_W1] = 20;
+ 	dm->slot_dur[CXST_B1] = BTC_B1_MAX;
++
++	if (_btc_policy_override >= 0) {
++		_set_policy(rtwdev, _btc_policy_override, BTC_ACT_BT_A2DP);
++		return;
++	}
+ 
+ 	switch (btc->cx.state_map) {
+ 	case BTC_WBUSY_BNOSCAN: /* wl-busy + bt-A2DP */
+
+Signed-off-by: Hamza Gouda <hraafat357@gmail.com>

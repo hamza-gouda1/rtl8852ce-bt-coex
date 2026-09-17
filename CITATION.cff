@@ -1,0 +1,30 @@
+cff-version: 1.2.0
+title: RTL8852CE Bluetooth/Wi-Fi Coexistence Toolkit for Linux
+message: >-
+  If you use this work in your research, debugging, or derivative
+  patches, please cite it using this metadata.
+authors:
+  - family-names: Gouda
+    given-names: Hamza
+    email: hraafat357@gmail.com
+version: 0.1.0
+date-released: "2026-09-18"
+license: GPL-2.0-only
+repository-code: "https://github.com/hraafat357/rtl8852ce-bt-coex"
+abstract: >-
+  Instrumented rtw89 driver patches, a correlated capture harness, and
+  repair tooling for the Realtek RTL8852CE combo card on Linux, where the
+  Wi-Fi/Bluetooth coexistence handshake does not complete (BT firmware
+  reports coex version 0, AFH never engages, ~50% of coordination mailbox
+  messages are rejected), causing Bluetooth A2DP audio packet loss under
+  2.4 GHz Wi-Fi traffic. Includes a direct-HCI adaptive-frequency-hopping
+  workaround and live coex policy tuning.
+keywords:
+  - linux
+  - bluetooth
+  - wifi
+  - rtw89
+  - realtek
+  - coexistence
+  - a2dp
+  - kernel

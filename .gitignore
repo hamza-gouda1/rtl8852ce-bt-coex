@@ -1,0 +1,27 @@
+# Build artifacts
+*.o
+*.ko
+*.ko.bz2
+*.ko.xz
+*.ko.zst
+*.mod
+*.mod.c
+*.cmd
+Module.symvers
+modules.order
+.tmp_versions/
+.cache.mk
+
+# Captures and logs (keep curated data/ only)
+*.btmon
+hci.txt
+hci.btmon
+traffic.log
+coex_state.log
+swap-failure.log
+btmon.txt
+
+# Editor / OS
+*.swp
+*~
+.DS_Store
