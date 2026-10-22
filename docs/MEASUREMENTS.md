@@ -40,6 +40,26 @@ SBC-XQ ~456 kbps), 2.4 GHz-only networks. Stall = ACL delivery gap > 50 ms.
 dominant mechanism; RF-level packet collisions (dead AFH) are. PS-TDMA gives a
 real but partial improvement.
 
+## v1.0 validation (bt-afh-guard active, AAC codec)
+
+Same laptop and headphones, now on AAC. Router channel 11 / 40 MHz, signal
+−68…−72 dBm. Bluetooth flow is the controller ACL TX rate, sampled every 2 s;
+the AAC stream needs ~46–47 pkts/s.
+
+| Condition | Wi-Fi load | BT flow | Audible |
+|---|---|---|---|
+| Wi-Fi idle | — | 46–47 pkts/s | clean |
+| Ethernet primary, flood over Wi-Fi radio (40 s) | ~1.5 Mbit/s each way, 35% loss | 46 pkts/s steady | clean |
+| Wi-Fi only, one download (25 s) | ~1 Mbit/s | 47 pkts/s steady | clean |
+| Wi-Fi only, two parallel downloads (28 s) | up to ~6.5 Mbit/s (link max) | steady 16 s, one ~10 s counter dip during a Wi-Fi beacon-loss event | clean |
+
+Live link AFH map (HCI Read AFH Channel Map) with the guard active:
+`FF FF FF 00 00 00 00 00 00 60`, i.e. channels 0–23 and 77–78 only. It was
+empty in all 121 v0.1 samples.
+
+Still to do: repeat the 600 s `capture-10min.sh` run with the guard active, to
+put a stall count next to the v0.1 baseline of 488.
+
 ## Interpretation
 
 See `ROOT-CAUSE.md`. Raw telemetry: `data/coex_state-121snapshots.log.gz`

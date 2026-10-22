@@ -20,9 +20,24 @@ Run order matters for some; each header explains itself.
   `btc_policy_override` module parameter (baseline → TDW1B1 → PS-TDMA →
   BT-exclusive → restore). Requires patch 0002.
 
-## Workaround layer
+## The fix (v1.0) — start here
 
-- **afh-test2.sh** — the centerpiece: computes the BT channel mask from the
+- **install.sh** — `sudo bash scripts/install.sh`. Installs `bt-afh-guard` as a
+  systemd service, plus the AAC plugin if you built it. It prints the guard's
+  first log line and the live link AFH map. It never touches the network.
+- **bt-afh-guard** — the daemon. `bash scripts/bt-afh-guard --dry-run` shows
+  the Wi-Fi block and the exact mask it would send (no root needed).
+  `journalctl -t bt-afh-guard` shows every change.
+- **build-aac-plugin.sh** — builds PipeWire's AAC codec for your installed
+  PipeWire version, as a normal user. Rebuild after PipeWire upgrades.
+- **uninstall.sh** — removes the service and plugin and resets the controller
+  to "all channels usable".
+
+Full explanation: [`SOLUTION.md`](SOLUTION.md).
+
+## Workaround layer (experiments)
+
+- **afh-test2.sh** — the A/B experiment (mask polarity fixed in v1.0): computes the BT channel mask from the
   live Wi-Fi frequency, programs it via HCI `Set AFH Host Channel
   Classification`, and A/B-tests 45 s masked vs 45 s unmasked. Verifies the
   A2DP stream is actually up first (ACL packet-counter delta — robust under
@@ -47,5 +62,13 @@ connected-without-profiles. In escalating order:
   not positional fields.
 - `pactl` under `sudo` cannot see the user's audio session — verify playback
   with controller counters instead.
+- Restarting PipeWire/WirePlumber while A2DP is streaming can wedge
+  `bluetoothd` ("a2dp-sink profile connect failed: Device or resource busy",
+  "Unable to select SEP"). Resetting the earbuds doesn't help; restarting
+  `bluetoothd` does (fix-a2dp.sh).
+- The AFH host map is 1 = usable, 0 = avoid. An all-zero map is invalid and
+  is rejected by the controller.
+- WirePlumber 0.4.x silently ignores `wireplumber.conf.d/*.conf`; use
+  `bluetooth.lua.d/*.lua`.
 - Kernel builds reject `__DATE__`/`__TIME__` (`-Werror=date-time`), and a
   failed compile can leave a stale `.ko`: always check mtime vs source.

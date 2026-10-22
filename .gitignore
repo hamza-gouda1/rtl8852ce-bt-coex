@@ -25,3 +25,9 @@ btmon.txt
 *.swp
 *~
 .DS_Store
+
+# AAC plugin build tree (scripts/build-aac-plugin.sh)
+build-aac/
+
+# afh-test2.sh capture dirs
+scripts/afh-test2-*/

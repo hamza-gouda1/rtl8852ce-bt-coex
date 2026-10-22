@@ -3,6 +3,41 @@
 All notable changes to this project are documented here.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.0.0] - 2026-10-23
+
+The fix. Validated with Wi-Fi as the only link under saturating download
+load: clean A2DP audio. See `docs/SOLUTION.md`.
+
+### Added
+- `scripts/bt-afh-guard` + `systemd/bt-afh-guard.service`. A persistent
+  direct-AFH daemon:
+  - reads the live Wi-Fi center frequency **and channel width**,
+  - programs `HCI_Set_AFH_Host_Channel_Classification`,
+  - re-sends on channel change, controller reset/`bluetoothd` restart, and every 60 s,
+  - clears the mask when Wi-Fi leaves 2.4 GHz.
+  - Includes `--dry-run`; overrides go in `/etc/default/bt-afh-guard`.
+- `scripts/build-aac-plugin.sh`: builds PipeWire's AAC Bluetooth codec
+  (`libspa-codec-bluez5-aac.so`) from the official source of the exact
+  installed PipeWire version. That gives better sound than SBC-XQ at about
+  half the airtime.
+- `scripts/install.sh` / `scripts/uninstall.sh`: one-command install and
+  removal. They never touch the network stack. The installer refuses an AAC
+  build that doesn't match the installed PipeWire.
+- `docs/SOLUTION.md`: how the fix works, validation results, router
+  recommendations, related findings, and troubleshooting.
+
+### Fixed
+- `scripts/afh-test2.sh`: **AFH mask polarity was inverted** (Wi-Fi channels
+  were marked usable and every other channel bad). That confined Bluetooth to
+  the Wi-Fi block, the opposite of the intent, and explains the inconclusive
+  v0.1 A/B result. Also fixed:
+  - "Read AFH map" now uses the correct opcode (OGF 0x05 / OCF 0x0006 instead of 0x03 / 0x0041).
+  - The "clear" step restores all channels instead of sending an invalid all-zero map.
+- `CITATION.cff`: repository URL now points to the actual repository.
+
+### Changed
+- README: "Just fix it" quick start, v1.0 status, updated roadmap and FAQ.
+
 ## [0.1.0] - 2026-09-18
 
 ### Added

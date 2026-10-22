@@ -3,6 +3,12 @@
 # verify A2DP is streaming, clear bgscan, then A/B test:
 #   Phase A: BT avoids the WiFi channel block (via standard HCI command)
 #   Phase B: mask cleared
+#
+# v1.0 fix: mask polarity corrected (1 = usable, 0 = avoid; v0.1 had it inverted,
+# so Phase A actually confined BT to the Wi-Fi block). Read AFH Channel Map now
+# uses the correct opcode (OGF 0x05 / OCF 0x0006), and "clear" restores all
+# channels instead of sending an invalid all-zero map.
+# For the permanent, self-updating version see scripts/bt-afh-guard.
 # Usage: sudo bash afh-test2.sh    (music playing the whole time!)
 set -u
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -37,11 +43,12 @@ FREQ=$(iw dev "$IFACE" link 2>/dev/null | awk '/freq:/{print int($2); exit}')
 if [ -z "$FREQ" ]; then echo "[FAIL] no WiFi link"; exit 1; fi
 echo "[*] WiFi center freq: $FREQ MHz"
 
-declare -a M=(0 0 0 0 0 0 0 0 0 0)
+# Spec: bit n = BT channel n; 1 = usable ("unknown"), 0 = bad. Bit 79 reserved (0).
+declare -a M=(255 255 255 255 255 255 255 255 255 127)
 NMIN=$((FREQ-2412)); NMAX=$((FREQ-2392))
 (( NMIN < 0 )) && NMIN=0
 (( NMAX > 78 )) && NMAX=78
-for ((n=NMIN; n<=NMAX; n++)); do M[n/8]=$(( M[n/8] | (1<<(n%8)) )); done
+for ((n=NMIN; n<=NMAX; n++)); do M[n/8]=$(( M[n/8] & ~(1<<(n%8)) )); done
 ARGS=""
 for b in "${M[@]}"; do ARGS="$ARGS $(printf '0x%02X' "$b")"; done
 echo "[*] Mask avoids BT channels $NMIN..$NMAX:$ARGS"
@@ -52,18 +59,18 @@ if [ -z "$HANDLE" ]; then echo "[FAIL] speaker not connected"; exit 1; fi
 H=$(printf "0x%02X 0x00" "$HANDLE")
 
 echo "[*] Link AFH map before:"
-hcitool cmd 0x03 0x0041 $H
+hcitool cmd 0x05 0x0006 $H   # HCI Read AFH Channel Map
 echo "[*] Setting host AFH classification ..."
 hcitool cmd 0x03 0x003F $ARGS
 sleep 1
 echo "[*] Link AFH map after (compare):"
-hcitool cmd 0x03 0x0041 $H
+hcitool cmd 0x05 0x0006 $H   # HCI Read AFH Channel Map
 
 echo "[*] Phase A: 45 s WITH the WiFi block masked -- listen!"
 timeout 50 btmon -w "$DIR/afh-on.btmon" 2>/dev/null
 
 echo "[*] Clearing mask ..."
-hcitool cmd 0x03 0x003F 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00
+hcitool cmd 0x03 0x003F 0xFF 0xFF 0xFF 0xFF 0xFF 0xFF 0xFF 0xFF 0xFF 0x7F   # all channels usable
 sleep 1
 echo "[*] Phase B: 45 s unmasked -- compare"
 timeout 50 btmon -w "$DIR/afh-off.btmon" 2>/dev/null

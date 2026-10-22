@@ -4,7 +4,7 @@
 ![Platform](https://img.shields.io/badge/platform-Linux-blue)
 ![Kernel](https://img.shields.io/badge/tested_kernel-7.0.13-orange)
 ![Hardware](https://img.shields.io/badge/hardware-Realtek_RTL8852CE-red)
-![Status](https://img.shields.io/badge/status-active_research-yellow)
+![Status](https://img.shields.io/badge/status-fixed_(v1.0)-brightgreen)
 
 **Bluetooth audio stuttering the moment 2.4 GHz Wi-Fi carries traffic — on a
 Realtek RTL8852CE laptop?** This repository explains *why* it happens, proves
@@ -16,6 +16,35 @@ that fix, measure, and repair it.
 > version **0**, the Wi-Fi side requires **7**), so adaptive frequency hopping
 > never engages and Bluetooth hops straight through the Wi-Fi channel —
 > packet-level RF collisions that no amount of time-slot tuning can fix.
+
+> **v1.0 — fixed.** A small service (`bt-afh-guard`) now delivers the missing
+> "avoid the Wi-Fi channel" map to the Bluetooth controller itself, at boot and
+> on every channel change, and an optional AAC codec build cuts Bluetooth
+> airtime in half. Validated with Wi-Fi as the only link under full download
+> load: **clean audio**. Full write-up: [`docs/SOLUTION.md`](docs/SOLUTION.md).
+
+---
+
+## Just fix it
+
+No kernel build, no driver swap, no reboot. It works with the stock `rtw89` driver.
+
+```bash
+git clone https://github.com/hamza-gouda1/rtl8852ce-bt-coex.git
+cd rtl8852ce-bt-coex
+
+# Optional but recommended: AAC codec for PipeWire (Debian/Ubuntu ship without it)
+sudo apt install build-essential meson ninja-build pkg-config libfdk-aac-dev \
+     libdbus-1-dev libsbc-dev libbluetooth-dev libglib2.0-dev libudev-dev
+bash scripts/build-aac-plugin.sh
+
+# Install the AFH guard service (+ the AAC plugin if you built it)
+sudo bash scripts/install.sh
+```
+
+Then put the earbuds in their case, run `sudo systemctl restart bluetooth`,
+and take them out again. Check it's working with `journalctl -t bt-afh-guard`.
+Remove everything with `sudo bash scripts/uninstall.sh`.
 
 ---
 
@@ -81,7 +110,10 @@ not one broken laptop.
 |---|---|
 | `patches/` | Two verified patches for the vanilla `rtw89` driver (7.0.13): **0001** enables the coexistence debugfs telemetry on kernels without `CONFIG_CFG80211_DEBUGFS` (liquorix et al.); **0002** adds live coex-policy tuning knobs (`/sys/module/rtw89_core/parameters/btc_policy_override`, `btc_w1_dur_ms`) |
 | `scripts/` | The full toolkit: verified module swap with auto-rollback, 10-minute correlated capture harness (HCI + traffic + coex state), policy A/B tester, **direct-AFH HCI workaround**, and a Bluetooth speaker repair kit |
-| `docs/` | [`ROOT-CAUSE.md`](docs/ROOT-CAUSE.md) · [`MEASUREMENTS.md`](docs/MEASUREMENTS.md) · [`USAGE.md`](docs/USAGE.md) |
+| `scripts/bt-afh-guard` + `systemd/` | **The v1.0 fix.** A persistent daemon that keeps the BT controller's AFH map in sync with the live Wi-Fi channel and width |
+| `scripts/build-aac-plugin.sh` | Builds PipeWire's AAC Bluetooth codec for your exact installed PipeWire version |
+| `scripts/install.sh` / `uninstall.sh` | One-command install and removal of the fix |
+| `docs/` | [`SOLUTION.md`](docs/SOLUTION.md) · [`ROOT-CAUSE.md`](docs/ROOT-CAUSE.md) · [`MEASUREMENTS.md`](docs/MEASUREMENTS.md) · [`USAGE.md`](docs/USAGE.md) |
 | `data/` | Raw telemetry: 121 coex-state snapshots, traffic log, stall tables |
 
 **Reproducibility guarantee:** applying the two patches to pristine 7.0.13
@@ -161,26 +193,34 @@ classification is also a **standard Bluetooth HCI command**, so the host can
 deliver the same message itself:
 
 ```
-Wi-Fi on channel 9  (2432–2452 MHz)  →  forbid BT channels 30–50
-Wi-Fi on channel 11 (2452–2472 MHz)  →  forbid BT channels 50–70
+Wi-Fi ch 11, 20 MHz (2452–2472 MHz)  →  avoid BT channels ~48–72
+Wi-Fi ch 11, 40 MHz (2432–2472 MHz)  →  avoid BT channels ~28–72
 
-hcitool cmd 0x03 0x003F <10-byte channel bitmask>
+hcitool cmd 0x03 0x003F <10-byte mask>    # bit n = BT channel n: 1 = usable, 0 = avoid
 ```
 
-`scripts/afh-test2.sh` does this automatically from your live frequency.
-**Status:** demonstrated end-to-end; stress-validation under sustained Wi-Fi
-load is the remaining step before it becomes the default behavior (see
-roadmap).
+`scripts/bt-afh-guard` does this automatically and keeps doing it: it reads
+the live center frequency **and width**, re-sends after controller resets and
+channel changes, and runs as a systemd service.
+
+**Status:** validated. With Wi-Fi as the only link and two parallel downloads
+saturating it, A2DP played cleanly. The headphones' live hop map moved from
+"all 79 channels" to **channels 0–23 and 77–78 only**.
+
+> v0.1's `afh-test2.sh` had the mask polarity inverted. It confined Bluetooth
+> *to* the Wi-Fi block instead of away from it. That is corrected in v1.0;
+> details in [`docs/SOLUTION.md`](docs/SOLUTION.md#2-the-bug-that-hid-the-fix-in-v01).
 
 ## FAQ
 
 <details>
 <summary><b>Will this fix my stutter?</b></summary>
-The root cause characterization is complete and reproduced; the policy knobs
-give a measurable ~24% improvement today, and the AFH workaround targets the
-dominant mechanism. The final stress-load validation is in progress — check
-the roadmap. Meanwhile, the capture harness tells you objectively what *your*
-bottleneck is.
+On the reference laptop, yes. With <code>bt-afh-guard</code> running, A2DP
+audio stayed clean while 2.4 GHz Wi-Fi was the only network link and was
+saturated by downloads. AAC (optional) lowers Bluetooth airtime further. If
+your Wi-Fi signal is very weak, also set the router's 2.4 GHz width to 20 MHz
+(see <a href="docs/SOLUTION.md">SOLUTION.md §6</a>). The capture harness still
+tells you objectively what <i>your</i> bottleneck is.
 </details>
 
 <details>
@@ -221,9 +261,12 @@ RTL8852C family.
 - [x] Root-cause characterization (121-sample telemetry)
 - [x] Coex policy A/B (5 schemes, objective stall counts)
 - [x] Direct-AFH HCI workaround demonstrated
-- [ ] **Stress-load validation** of the AFH mask (heavy download during A/B)
-- [ ] **Persistent AFH programming** on channel change / reconnect
-- [ ] Upstream submission to linux-wireless
+- [x] Mask polarity bug found and fixed (v1.0)
+- [x] **Stress-load validation** of the AFH mask (Wi-Fi-only, saturated)
+- [x] **Persistent AFH programming** on channel change / reconnect (`bt-afh-guard`)
+- [x] AAC codec build for PipeWire (less airtime, better sound)
+- [ ] Repeat the 10-minute stall capture with the guard active (numbers for MEASUREMENTS.md)
+- [ ] Upstream submission to linux-wireless / BlueZ
 
 ## Contributing
 

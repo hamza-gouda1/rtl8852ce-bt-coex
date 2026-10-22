@@ -1,0 +1,81 @@
+#!/bin/bash
+# bt-afh-guard — persistent direct-AFH coexistence fix for the Realtek RTL8852CE
+# Part of rtl8852ce-bt-coex by Hamza Gouda (GPL-2.0)
+#
+# Problem: on Linux the RTL8852CE's Wi-Fi and Bluetooth firmware never complete
+# their coexistence handshake (BT reports coex v0, Wi-Fi wants v7), so the
+# Bluetooth controller is never told which channels the Wi-Fi link occupies and
+# keeps hopping straight through it (see docs/ROOT-CAUSE.md).
+#
+# Fix: hand the BT controller the "avoid these channels" map ourselves, using the
+# standard HCI command  Set AFH Host Channel Classification  (OGF 0x03, OCF 0x003F).
+#
+# Bitmask (Core Spec Vol 4 Part E §7.3.46): 80 bits, bit n = BT channel n
+# (2402 + n MHz). 1 = "unknown" (usable), 0 = "bad" (avoid). Bit 79 is reserved
+# and must be 0. At least 20 channels must stay usable.
+#
+# The daemon checks every INTERVAL seconds, follows Wi-Fi channel/width changes,
+# re-sends after controller resets, and clears the mask when Wi-Fi leaves 2.4 GHz.
+# Optional overrides: /etc/default/bt-afh-guard (GUARD_MHZ, INTERVAL, REFRESH, HCI)
+
+GUARD_MHZ=2          # extra margin on each side of the Wi-Fi block
+INTERVAL=5           # seconds between checks
+REFRESH=60           # re-send even if unchanged (covers silent controller resets)
+HCI=hci0
+[ -r /etc/default/bt-afh-guard ] && . /etc/default/bt-afh-guard
+
+last=""; last_sent=0
+log() { logger -t bt-afh-guard "$*"; }
+
+wifi_block() {   # prints "lo hi" (MHz) occupied by the connected 2.4 GHz Wi-Fi link, or nothing
+    local ifc info c1 w
+    for ifc in $(iw dev 2>/dev/null | awk '/Interface/{print $2}'); do
+        info=$(iw dev "$ifc" info 2>/dev/null)
+        c1=$(sed -n 's/.*center1: \([0-9]*\) MHz.*/\1/p' <<<"$info")
+        w=$(sed -n 's/.*width: \([0-9]*\) MHz.*/\1/p' <<<"$info")
+        [ -z "$c1" ] && c1=$(sed -n 's/.*channel [0-9]* (\([0-9]*\) MHz).*/\1/p' <<<"$info")
+        [ -z "$w" ] && w=20
+        if [ -n "$c1" ] && [ "$c1" -lt 2500 ]; then
+            echo $(( c1 - w/2 - GUARD_MHZ )) $(( c1 + w/2 + GUARD_MHZ )); return
+        fi
+    done
+}
+
+build_mask() {   # $1 lo MHz, $2 hi MHz (both empty = no Wi-Fi) -> 10 hex bytes, LSB first
+    local -a M=(255 255 255 255 255 255 255 255 255 127)   # channels 0-78 usable, bit 79 = 0
+    if [ -n "$1" ]; then
+        local lo=$(( $1 - 2402 )) hi=$(( $2 - 2402 )) n
+        (( lo < 0 )) && lo=0; (( hi > 78 )) && hi=78
+        if (( 79 - (hi - lo + 1) >= 20 )); then
+            for ((n=lo; n<=hi; n++)); do M[n/8]=$(( M[n/8] & ~(1<<(n%8)) )); done
+        fi
+    fi
+    local out="" b; for b in "${M[@]}"; do out+=" $(printf '0x%02X' "$b")"; done; echo "$out"
+}
+
+# --dry-run: print what would be sent and exit (no root needed)
+if [ "${1:-}" = "--dry-run" ]; then
+    read -r lo hi <<<"$(wifi_block)"
+    echo "Wi-Fi block: ${lo:-none}-${hi:-none} MHz"
+    echo "HCI mask:$(build_mask "$lo" "$hi")"
+    exit 0
+fi
+
+while true; do
+    if hciconfig "$HCI" 2>/dev/null | grep -q 'UP RUNNING'; then
+        read -r lo hi <<<"$(wifi_block)"
+        mask=$(build_mask "$lo" "$hi")
+        now=$(date +%s)
+        if [ "$mask" != "$last" ] || (( now - last_sent >= REFRESH )); then
+            if hcitool -i "$HCI" cmd 0x03 0x003F $mask >/dev/null 2>&1; then
+                [ "$mask" != "$last" ] && log "avoiding ${lo:-none}-${hi:-none} MHz; mask:$mask"
+                last="$mask"; last_sent=$now
+            else
+                log "failed to send AFH map"
+            fi
+        fi
+    else
+        last=""   # controller down: resend as soon as it comes back
+    fi
+    sleep "$INTERVAL"
+done

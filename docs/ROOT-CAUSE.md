@@ -62,6 +62,11 @@ gives the BT side the frequency separation the broken mailbox was supposed to
 provide. This is the same information Realtek's Windows drivers deliver
 automatically.
 
-See `scripts/afh-test2.sh` for the reference implementation (computes the mask
-from the live interface, verifies the stream is up, A/B tests with HCI-level
-capture).
+Bit polarity matters: in the 80-bit map, **1 = usable ("unknown"), 0 = bad**,
+bit 79 is reserved, and at least 20 channels must stay usable. The v0.1 test
+script had this inverted (fixed in v1.0).
+
+The permanent implementation is `scripts/bt-afh-guard`, a systemd service that
+tracks the live Wi-Fi center frequency and width and re-programs the map on
+every change and controller reset. `scripts/afh-test2.sh` remains as the A/B
+experiment. Results and validation: [`SOLUTION.md`](SOLUTION.md).
