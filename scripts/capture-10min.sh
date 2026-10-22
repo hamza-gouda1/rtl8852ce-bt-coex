@@ -3,7 +3,7 @@
 #   hci.btmon / hci.txt : full Bluetooth HCI trace (stutters = measurable gaps)
 #   traffic.log         : every 2 s -> WiFi rx/tx bytes, signal, BT sink errors
 #   coex_state.log      : every 5 s -> /sys/kernel/debug/rtw89/btc_info snapshots
-# Keep music playing and use the laptop normally (agent working = traffic).
+# Keep music playing and use the laptop normally (downloads, streaming, updates = traffic).
 # The bgscan clear at the start is runtime-only and self-reverts.
 set -uo pipefail
 STAMP=$(date +%H%M%S)

@@ -7,10 +7,10 @@ authors:
   - family-names: Gouda
     given-names: Hamza
     email: hraafat357@gmail.com
-version: 0.1.0
-date-released: "2026-09-18"
+version: 1.0.0
+date-released: "2026-10-23"
 license: GPL-2.0-only
-repository-code: "https://github.com/hraafat357/rtl8852ce-bt-coex"
+repository-code: "https://github.com/hamza-gouda1/rtl8852ce-bt-coex"
 abstract: >-
   Instrumented rtw89 driver patches, a correlated capture harness, and
   repair tooling for the Realtek RTL8852CE combo card on Linux, where the
@@ -18,7 +18,9 @@ abstract: >-
   reports coex version 0, AFH never engages, ~50% of coordination mailbox
   messages are rejected), causing Bluetooth A2DP audio packet loss under
   2.4 GHz Wi-Fi traffic. Includes a direct-HCI adaptive-frequency-hopping
-  workaround and live coex policy tuning.
+  workaround and live coex policy tuning, and (v1.0) a persistent
+  AFH guard service plus a PipeWire AAC codec build that together
+  eliminate the audible stutter.
 keywords:
   - linux
   - bluetooth
