@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-2.0-only
 [Unit]
 Description=Keep Bluetooth hopping away from the active 2.4 GHz Wi-Fi channel (RTL8852CE coex fix)
 Documentation=https://github.com/hamza-gouda1/rtl8852ce-bt-coex

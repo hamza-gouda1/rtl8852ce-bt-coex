@@ -3,6 +3,26 @@
 All notable changes to this project are documented here.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Added
+- Channel-map figure in the README (`docs/img/afh-channel-map.svg`), drawn
+  from the measured AFH maps in `docs/MEASUREMENTS.md`.
+- shellcheck CI workflow.
+- `LICENSES/` with the full GPL-2.0 and BSD-3-Clause texts; SPDX headers in
+  every script and the systemd unit.
+
+### Changed
+- `scripts/re-pair-p40i.sh` is now `scripts/re-pair-device.sh`. It and
+  `fix-a2dp.sh` and `bt-reset-repair.sh` take the device's Bluetooth address
+  as an argument (or `BT_DEV`) instead of a hardcoded one.
+- `LICENSE` now holds the full GPL-2.0 text, so GitHub detects it; the
+  per-folder licensing is in `LICENSES/README.md`.
+
+### Fixed
+- shellcheck warnings in `afh-test2.sh` (unused variable), `capture-10min.sh`
+  and `swap-modules.sh`.
+
 ## [1.0.0] - 2026-10-23
 
 The fix. Validated with Wi-Fi as the only link under saturating download

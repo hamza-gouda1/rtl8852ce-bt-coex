@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-2.0-only
 # AFH experiment v2: compute the channel mask from the LIVE WiFi frequency,
 # verify A2DP is streaming, clear bgscan, then A/B test:
 #   Phase A: BT avoids the WiFi channel block (via standard HCI command)
@@ -15,7 +16,6 @@ SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 DIR="$SCRIPT_DIR/afh-test2-$(date +%H%M%S)"
 mkdir -p "$DIR"
 IFACE=wlp108s0
-DEV=98:47:44:A0:D1:65
 
 echo "[*] Clearing bgscan (root ctrl socket) ..."
 NETID=$(sudo wpa_cli -i "$IFACE" list_networks 2>/dev/null | awk '/\[CURRENT\]/{print $1; exit}')

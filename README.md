@@ -5,6 +5,7 @@
 ![Kernel](https://img.shields.io/badge/tested_kernel-7.0.13-orange)
 ![Hardware](https://img.shields.io/badge/hardware-Realtek_RTL8852CE-red)
 ![Status](https://img.shields.io/badge/status-fixed_(v1.0)-brightgreen)
+[![shellcheck](https://github.com/hamza-gouda1/rtl8852ce-bt-coex/actions/workflows/shellcheck.yml/badge.svg)](https://github.com/hamza-gouda1/rtl8852ce-bt-coex/actions/workflows/shellcheck.yml)
 
 **Bluetooth audio stuttering the moment 2.4 GHz Wi-Fi carries traffic — on a
 Realtek RTL8852CE laptop?** This repository explains *why* it happens, proves
@@ -22,6 +23,10 @@ that fix, measure, and repair it.
 > on every channel change, and an optional AAC codec build cuts Bluetooth
 > airtime in half. Validated with Wi-Fi as the only link under full download
 > load: **clean audio**. Full write-up: [`docs/SOLUTION.md`](docs/SOLUTION.md).
+
+<p align="center">
+  <img src="docs/img/afh-channel-map.svg" alt="Bluetooth channel map: in v0.1 the map is empty and Bluetooth hops across all 79 channels, through the Wi-Fi signal; with bt-afh-guard it uses channels 0-23 and 77-78 only" width="760">
+</p>
 
 ---
 
@@ -290,5 +295,6 @@ If this repository diagnosed or fixed your laptop, please **star it** and
 share your `btc_info` dump — that telemetry is what turns one laptop's fix
 into every RTL8852CE owner's fix.
 
-Licensed GPL-2.0 (matching the upstream driver) — see [`LICENSE`](LICENSE).
+Scripts and docs are GPL-2.0-only; the kernel patches are GPL-2.0-only OR
+BSD-3-Clause, matching the upstream driver. See [`LICENSES/`](LICENSES/README.md).
 **No firmware blobs are or will ever be distributed here.**

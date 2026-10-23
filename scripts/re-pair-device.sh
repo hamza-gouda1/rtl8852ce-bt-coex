@@ -1,15 +1,22 @@
 #!/usr/bin/env bash
-# Remove + re-pair the soundcore P40i (the known-good ritual, scripted).
-# Run this, then when it says so, hold the speaker's Bluetooth button until
+# SPDX-License-Identifier: GPL-2.0-only
+# Remove + re-pair a Bluetooth audio device (the known-good ritual, scripted).
+# Run this, then when it says so, hold the device's Bluetooth button until
 # it enters pairing mode (sound / blinking LED).
 set -u
-DEV=98:47:44:A0:D1:65
+# Bluetooth address of your headphones/speaker: first argument or $BT_DEV.
+# Find it with: bluetoothctl devices
+DEV=${1:-${BT_DEV:-}}
+if [ -z "$DEV" ]; then
+    echo "usage: $(basename "$0") <bluetooth-address>   (or set BT_DEV)" >&2
+    exit 2
+fi
 
 echo "[*] Removing device (clears pairing + service cache) ..."
 bluetoothctl remove "$DEV" 2>&1 | tail -1
 bluetoothctl disconnect "$DEV" >/dev/null 2>&1
 
-echo "[*] Scanning for 45 s -- put the P40i in PAIRING MODE now"
+echo "[*] Scanning for 45 s -- put the device in PAIRING MODE now"
 echo "    (hold its Bluetooth button ~4 s until it beeps / LED blinks) ..."
 timeout 50 bluetoothctl --timeout 45 scan on >/dev/null 2>&1
 

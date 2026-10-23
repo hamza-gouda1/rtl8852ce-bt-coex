@@ -1,0 +1,177 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 812 250" width="812" height="250" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" role="img" aria-labelledby="t d">
+<title id="t">Bluetooth channel map before and after bt-afh-guard</title>
+<desc id="d">v0.1: the AFH map was empty in 121 of 121 samples, so Bluetooth hopped across all 79 channels, including the Wi-Fi channel. v1.0: bt-afh-guard sets the map to channels 0-23 and 77-78 only.</desc>
+<rect width="812" height="250" rx="10" fill="#ffffff"/>
+<text x="20" y="30" font-size="15" font-weight="700" fill="#1f2328">Where Bluetooth is allowed to hop (79 channels, 2402–2480 MHz)</text>
+<text x="20" y="50" font-size="12" fill="#59636e">Router on Wi-Fi channel 11, 40 MHz. Each cell is one 1 MHz Bluetooth channel.</text>
+<rect x="390" y="66" width="328" height="122" fill="#fff1e5" stroke="#d1700f" stroke-dasharray="4 3"/>
+<text x="554.0" y="80" font-size="11" text-anchor="middle" fill="#a3510b">Wi-Fi signal, 2432–2472 MHz</text>
+<text x="20" y="109" font-size="13" font-weight="600" fill="#1f2328">v0.1  stock</text>
+<rect x="150.5" y="92" width="7" height="26" fill="#0969da"/>
+<rect x="158.5" y="92" width="7" height="26" fill="#0969da"/>
+<rect x="166.5" y="92" width="7" height="26" fill="#0969da"/>
+<rect x="174.5" y="92" width="7" height="26" fill="#0969da"/>
+<rect x="182.5" y="92" width="7" height="26" fill="#0969da"/>
+<rect x="190.5" y="92" width="7" height="26" fill="#0969da"/>
+<rect x="198.5" y="92" width="7" height="26" fill="#0969da"/>
+<rect x="206.5" y="92" width="7" height="26" fill="#0969da"/>
+<rect x="214.5" y="92" width="7" height="26" fill="#0969da"/>
+<rect x="222.5" y="92" width="7" height="26" fill="#0969da"/>
+<rect x="230.5" y="92" width="7" height="26" fill="#0969da"/>
+<rect x="238.5" y="92" width="7" height="26" fill="#0969da"/>
+<rect x="246.5" y="92" width="7" height="26" fill="#0969da"/>
+<rect x="254.5" y="92" width="7" height="26" fill="#0969da"/>
+<rect x="262.5" y="92" width="7" height="26" fill="#0969da"/>
+<rect x="270.5" y="92" width="7" height="26" fill="#0969da"/>
+<rect x="278.5" y="92" width="7" height="26" fill="#0969da"/>
+<rect x="286.5" y="92" width="7" height="26" fill="#0969da"/>
+<rect x="294.5" y="92" width="7" height="26" fill="#0969da"/>
+<rect x="302.5" y="92" width="7" height="26" fill="#0969da"/>
+<rect x="310.5" y="92" width="7" height="26" fill="#0969da"/>
+<rect x="318.5" y="92" width="7" height="26" fill="#0969da"/>
+<rect x="326.5" y="92" width="7" height="26" fill="#0969da"/>
+<rect x="334.5" y="92" width="7" height="26" fill="#0969da"/>
+<rect x="342.5" y="92" width="7" height="26" fill="#0969da"/>
+<rect x="350.5" y="92" width="7" height="26" fill="#0969da"/>
+<rect x="358.5" y="92" width="7" height="26" fill="#0969da"/>
+<rect x="366.5" y="92" width="7" height="26" fill="#0969da"/>
+<rect x="374.5" y="92" width="7" height="26" fill="#0969da"/>
+<rect x="382.5" y="92" width="7" height="26" fill="#0969da"/>
+<rect x="390.5" y="92" width="7" height="26" fill="#0969da"/>
+<rect x="398.5" y="92" width="7" height="26" fill="#0969da"/>
+<rect x="406.5" y="92" width="7" height="26" fill="#0969da"/>
+<rect x="414.5" y="92" width="7" height="26" fill="#0969da"/>
+<rect x="422.5" y="92" width="7" height="26" fill="#0969da"/>
+<rect x="430.5" y="92" width="7" height="26" fill="#0969da"/>
+<rect x="438.5" y="92" width="7" height="26" fill="#0969da"/>
+<rect x="446.5" y="92" width="7" height="26" fill="#0969da"/>
+<rect x="454.5" y="92" width="7" height="26" fill="#0969da"/>
+<rect x="462.5" y="92" width="7" height="26" fill="#0969da"/>
+<rect x="470.5" y="92" width="7" height="26" fill="#0969da"/>
+<rect x="478.5" y="92" width="7" height="26" fill="#0969da"/>
+<rect x="486.5" y="92" width="7" height="26" fill="#0969da"/>
+<rect x="494.5" y="92" width="7" height="26" fill="#0969da"/>
+<rect x="502.5" y="92" width="7" height="26" fill="#0969da"/>
+<rect x="510.5" y="92" width="7" height="26" fill="#0969da"/>
+<rect x="518.5" y="92" width="7" height="26" fill="#0969da"/>
+<rect x="526.5" y="92" width="7" height="26" fill="#0969da"/>
+<rect x="534.5" y="92" width="7" height="26" fill="#0969da"/>
+<rect x="542.5" y="92" width="7" height="26" fill="#0969da"/>
+<rect x="550.5" y="92" width="7" height="26" fill="#0969da"/>
+<rect x="558.5" y="92" width="7" height="26" fill="#0969da"/>
+<rect x="566.5" y="92" width="7" height="26" fill="#0969da"/>
+<rect x="574.5" y="92" width="7" height="26" fill="#0969da"/>
+<rect x="582.5" y="92" width="7" height="26" fill="#0969da"/>
+<rect x="590.5" y="92" width="7" height="26" fill="#0969da"/>
+<rect x="598.5" y="92" width="7" height="26" fill="#0969da"/>
+<rect x="606.5" y="92" width="7" height="26" fill="#0969da"/>
+<rect x="614.5" y="92" width="7" height="26" fill="#0969da"/>
+<rect x="622.5" y="92" width="7" height="26" fill="#0969da"/>
+<rect x="630.5" y="92" width="7" height="26" fill="#0969da"/>
+<rect x="638.5" y="92" width="7" height="26" fill="#0969da"/>
+<rect x="646.5" y="92" width="7" height="26" fill="#0969da"/>
+<rect x="654.5" y="92" width="7" height="26" fill="#0969da"/>
+<rect x="662.5" y="92" width="7" height="26" fill="#0969da"/>
+<rect x="670.5" y="92" width="7" height="26" fill="#0969da"/>
+<rect x="678.5" y="92" width="7" height="26" fill="#0969da"/>
+<rect x="686.5" y="92" width="7" height="26" fill="#0969da"/>
+<rect x="694.5" y="92" width="7" height="26" fill="#0969da"/>
+<rect x="702.5" y="92" width="7" height="26" fill="#0969da"/>
+<rect x="710.5" y="92" width="7" height="26" fill="#0969da"/>
+<rect x="718.5" y="92" width="7" height="26" fill="#0969da"/>
+<rect x="726.5" y="92" width="7" height="26" fill="#0969da"/>
+<rect x="734.5" y="92" width="7" height="26" fill="#0969da"/>
+<rect x="742.5" y="92" width="7" height="26" fill="#0969da"/>
+<rect x="750.5" y="92" width="7" height="26" fill="#0969da"/>
+<rect x="758.5" y="92" width="7" height="26" fill="#0969da"/>
+<rect x="766.5" y="92" width="7" height="26" fill="#0969da"/>
+<rect x="774.5" y="92" width="7" height="26" fill="#0969da"/>
+<text x="150" y="132" font-size="11" fill="#59636e">AFH map empty (121/121 samples)</text>
+<text x="20" y="163" font-size="13" font-weight="600" fill="#1f2328">v1.0  bt-afh-guard</text>
+<rect x="150.5" y="146" width="7" height="26" fill="#0969da"/>
+<rect x="158.5" y="146" width="7" height="26" fill="#0969da"/>
+<rect x="166.5" y="146" width="7" height="26" fill="#0969da"/>
+<rect x="174.5" y="146" width="7" height="26" fill="#0969da"/>
+<rect x="182.5" y="146" width="7" height="26" fill="#0969da"/>
+<rect x="190.5" y="146" width="7" height="26" fill="#0969da"/>
+<rect x="198.5" y="146" width="7" height="26" fill="#0969da"/>
+<rect x="206.5" y="146" width="7" height="26" fill="#0969da"/>
+<rect x="214.5" y="146" width="7" height="26" fill="#0969da"/>
+<rect x="222.5" y="146" width="7" height="26" fill="#0969da"/>
+<rect x="230.5" y="146" width="7" height="26" fill="#0969da"/>
+<rect x="238.5" y="146" width="7" height="26" fill="#0969da"/>
+<rect x="246.5" y="146" width="7" height="26" fill="#0969da"/>
+<rect x="254.5" y="146" width="7" height="26" fill="#0969da"/>
+<rect x="262.5" y="146" width="7" height="26" fill="#0969da"/>
+<rect x="270.5" y="146" width="7" height="26" fill="#0969da"/>
+<rect x="278.5" y="146" width="7" height="26" fill="#0969da"/>
+<rect x="286.5" y="146" width="7" height="26" fill="#0969da"/>
+<rect x="294.5" y="146" width="7" height="26" fill="#0969da"/>
+<rect x="302.5" y="146" width="7" height="26" fill="#0969da"/>
+<rect x="310.5" y="146" width="7" height="26" fill="#0969da"/>
+<rect x="318.5" y="146" width="7" height="26" fill="#0969da"/>
+<rect x="326.5" y="146" width="7" height="26" fill="#0969da"/>
+<rect x="334.5" y="146" width="7" height="26" fill="#0969da"/>
+<rect x="342.5" y="146" width="7" height="26" fill="#e6e8eb"/>
+<rect x="350.5" y="146" width="7" height="26" fill="#e6e8eb"/>
+<rect x="358.5" y="146" width="7" height="26" fill="#e6e8eb"/>
+<rect x="366.5" y="146" width="7" height="26" fill="#e6e8eb"/>
+<rect x="374.5" y="146" width="7" height="26" fill="#e6e8eb"/>
+<rect x="382.5" y="146" width="7" height="26" fill="#e6e8eb"/>
+<rect x="390.5" y="146" width="7" height="26" fill="#e6e8eb"/>
+<rect x="398.5" y="146" width="7" height="26" fill="#e6e8eb"/>
+<rect x="406.5" y="146" width="7" height="26" fill="#e6e8eb"/>
+<rect x="414.5" y="146" width="7" height="26" fill="#e6e8eb"/>
+<rect x="422.5" y="146" width="7" height="26" fill="#e6e8eb"/>
+<rect x="430.5" y="146" width="7" height="26" fill="#e6e8eb"/>
+<rect x="438.5" y="146" width="7" height="26" fill="#e6e8eb"/>
+<rect x="446.5" y="146" width="7" height="26" fill="#e6e8eb"/>
+<rect x="454.5" y="146" width="7" height="26" fill="#e6e8eb"/>
+<rect x="462.5" y="146" width="7" height="26" fill="#e6e8eb"/>
+<rect x="470.5" y="146" width="7" height="26" fill="#e6e8eb"/>
+<rect x="478.5" y="146" width="7" height="26" fill="#e6e8eb"/>
+<rect x="486.5" y="146" width="7" height="26" fill="#e6e8eb"/>
+<rect x="494.5" y="146" width="7" height="26" fill="#e6e8eb"/>
+<rect x="502.5" y="146" width="7" height="26" fill="#e6e8eb"/>
+<rect x="510.5" y="146" width="7" height="26" fill="#e6e8eb"/>
+<rect x="518.5" y="146" width="7" height="26" fill="#e6e8eb"/>
+<rect x="526.5" y="146" width="7" height="26" fill="#e6e8eb"/>
+<rect x="534.5" y="146" width="7" height="26" fill="#e6e8eb"/>
+<rect x="542.5" y="146" width="7" height="26" fill="#e6e8eb"/>
+<rect x="550.5" y="146" width="7" height="26" fill="#e6e8eb"/>
+<rect x="558.5" y="146" width="7" height="26" fill="#e6e8eb"/>
+<rect x="566.5" y="146" width="7" height="26" fill="#e6e8eb"/>
+<rect x="574.5" y="146" width="7" height="26" fill="#e6e8eb"/>
+<rect x="582.5" y="146" width="7" height="26" fill="#e6e8eb"/>
+<rect x="590.5" y="146" width="7" height="26" fill="#e6e8eb"/>
+<rect x="598.5" y="146" width="7" height="26" fill="#e6e8eb"/>
+<rect x="606.5" y="146" width="7" height="26" fill="#e6e8eb"/>
+<rect x="614.5" y="146" width="7" height="26" fill="#e6e8eb"/>
+<rect x="622.5" y="146" width="7" height="26" fill="#e6e8eb"/>
+<rect x="630.5" y="146" width="7" height="26" fill="#e6e8eb"/>
+<rect x="638.5" y="146" width="7" height="26" fill="#e6e8eb"/>
+<rect x="646.5" y="146" width="7" height="26" fill="#e6e8eb"/>
+<rect x="654.5" y="146" width="7" height="26" fill="#e6e8eb"/>
+<rect x="662.5" y="146" width="7" height="26" fill="#e6e8eb"/>
+<rect x="670.5" y="146" width="7" height="26" fill="#e6e8eb"/>
+<rect x="678.5" y="146" width="7" height="26" fill="#e6e8eb"/>
+<rect x="686.5" y="146" width="7" height="26" fill="#e6e8eb"/>
+<rect x="694.5" y="146" width="7" height="26" fill="#e6e8eb"/>
+<rect x="702.5" y="146" width="7" height="26" fill="#e6e8eb"/>
+<rect x="710.5" y="146" width="7" height="26" fill="#e6e8eb"/>
+<rect x="718.5" y="146" width="7" height="26" fill="#e6e8eb"/>
+<rect x="726.5" y="146" width="7" height="26" fill="#e6e8eb"/>
+<rect x="734.5" y="146" width="7" height="26" fill="#e6e8eb"/>
+<rect x="742.5" y="146" width="7" height="26" fill="#e6e8eb"/>
+<rect x="750.5" y="146" width="7" height="26" fill="#e6e8eb"/>
+<rect x="758.5" y="146" width="7" height="26" fill="#e6e8eb"/>
+<rect x="766.5" y="146" width="7" height="26" fill="#0969da"/>
+<rect x="774.5" y="146" width="7" height="26" fill="#0969da"/>
+<text x="150" y="186" font-size="11" fill="#59636e">map FF FF FF 00 00 00 00 00 00 60</text>
+<text x="154.0" y="214" font-size="10" text-anchor="middle" fill="#59636e">ch 0</text>
+<text x="346.0" y="214" font-size="10" text-anchor="middle" fill="#59636e">ch 24</text>
+<text x="770.0" y="214" font-size="10" text-anchor="middle" fill="#59636e">ch 77</text>
+<rect x="150" y="226" width="10" height="10" fill="#0969da"/><text x="166" y="235" font-size="11" fill="#1f2328">used</text>
+<rect x="220" y="226" width="10" height="10" fill="#e6e8eb" stroke="#c8ccd1"/><text x="236" y="235" font-size="11" fill="#1f2328">avoided</text>
+<text x="792" y="235" font-size="10" text-anchor="end" fill="#59636e">Source: docs/MEASUREMENTS.md (HCI Read AFH Channel Map)</text>
+</svg>

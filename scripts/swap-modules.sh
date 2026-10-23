@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-2.0-only
 # Swaps the in-tree rtw89 modules for our debugfs-enabled build (v3).
 # State detection is based on the module dir contents:
 #   rtw89_core.ko      -> our build installed
@@ -29,7 +30,9 @@ diag() {
     dmesg | grep -iE 'rtw89|debugfs|wlan' | tail -80 >> "$FAILLOG" 2>&1
     echo "--- driver binding:" >> "$FAILLOG"
     readlink -f /sys/class/net/wlp108s0/device/driver >> "$FAILLOG" 2>&1
-    ls /sys/module/ | grep -E 'rtw89|mac80211' >> "$FAILLOG" 2>&1
+    for m in /sys/module/*; do
+        case ${m##*/} in *rtw89*|*mac80211*) echo "${m##*/}" ;; esac
+    done >> "$FAILLOG" 2>&1
     echo "[*] diagnostics written to $FAILLOG"
 }
 

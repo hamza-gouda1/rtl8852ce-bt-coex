@@ -1,11 +1,18 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-2.0-only
 # Fixes the stuck "no A2DP / handsfree only" state without unpairing.
 # Root cause: bluetoothd caches the device's A2DP SEP (stream endpoint) info;
 # after audio-stack restarts the local codec endpoints no longer match the
 # cache -> 'Unable to select SEP'. Restarting bluetoothd clears the cache
 # (pairing is preserved; the speaker reconnects after).
 set -u
-DEV=98:47:44:A0:D1:65
+# Bluetooth address of your headphones/speaker: first argument or $BT_DEV.
+# Find it with: bluetoothctl devices
+DEV=${1:-${BT_DEV:-}}
+if [ -z "$DEV" ]; then
+    echo "usage: $(basename "$0") <bluetooth-address>   (or set BT_DEV)" >&2
+    exit 2
+fi
 
 echo "[*] Disconnecting speaker ..."
 bluetoothctl disconnect "$DEV" >/dev/null 2>&1

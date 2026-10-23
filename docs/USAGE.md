@@ -52,7 +52,10 @@ connected-without-profiles. In escalating order:
   Cures "handsfree only" / "no a2dp-sink profile".
 - **bt-reset-repair.sh** — controller power-cycle (`btmgmt power off/on`) +
   re-pair. Cures zombie SCO sessions keeping A2DP refused.
-- **re-pair-p40i.sh** — scripted remove/scan/pair/trust/connect.
+- **re-pair-device.sh** — scripted remove/scan/pair/trust/connect.
+
+The three repair scripts take your device's Bluetooth address as the first
+argument (or `BT_DEV`); find it with `bluetoothctl devices`.
 
 ## Known gotchas (learned the hard way)
 

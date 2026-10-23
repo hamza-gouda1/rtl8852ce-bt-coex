@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-2.0-only
 # Build PipeWire's Bluetooth AAC codec plugin (libspa-codec-bluez5-aac.so) for the
 # EXACT PipeWire version installed on this machine.
 # Part of rtl8852ce-bt-coex by Hamza Gouda (GPL-2.0)

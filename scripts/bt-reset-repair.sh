@@ -1,8 +1,15 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-2.0-only
 # Full Bluetooth controller power-cycle + re-pair ritual.
 # Kills any zombie SCO/HFP session at the controller level, then re-pairs.
 set -u
-DEV=98:47:44:A0:D1:65
+# Bluetooth address of your headphones/speaker: first argument or $BT_DEV.
+# Find it with: bluetoothctl devices
+DEV=${1:-${BT_DEV:-}}
+if [ -z "$DEV" ]; then
+    echo "usage: $(basename "$0") <bluetooth-address>   (or set BT_DEV)" >&2
+    exit 2
+fi
 
 echo "[*] Disconnecting ..."
 bluetoothctl disconnect "$DEV" >/dev/null 2>&1

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-2.0-only
 # Phase-2 live experiment: measure BT delivery stalls per coex policy.
 # Requires the otree-dbg build with btc_policy_override params (swap first!).
 # Keep music playing the whole time; each phase lasts ~50 s.

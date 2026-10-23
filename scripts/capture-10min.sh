@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-2.0-only
 # Phase-1 capture (10 minutes) against the debugfs-enabled rtw89 build:
 #   hci.btmon / hci.txt : full Bluetooth HCI trace (stutters = measurable gaps)
 #   traffic.log         : every 2 s -> WiFi rx/tx bytes, signal, BT sink errors
@@ -34,6 +35,8 @@ sudo timeout 610 btmon -w "$DIR/hci.btmon" &
 S1=$!
 ( while true; do
     echo "=== $(date +%s.%N) ===" >> "$DIR/coex_state.log"
+    # Only the read needs root; the log stays owned by the invoking user.
+    # shellcheck disable=SC2024
     sudo cat "$DBG/btc_info" >> "$DIR/coex_state.log" 2>&1
     sleep 5
   done ) &

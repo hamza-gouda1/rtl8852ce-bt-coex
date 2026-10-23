@@ -1,0 +1,19 @@
+name: shellcheck
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  shellcheck:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Lint shell scripts
+        run: shellcheck --version && shellcheck -S warning scripts/*.sh scripts/bt-afh-guard
+      - name: Syntax check
+        run: for f in scripts/*.sh scripts/bt-afh-guard; do bash -n "$f"; done

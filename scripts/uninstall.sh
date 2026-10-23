@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-2.0-only
 # Remove the bt-afh-guard service and the AAC plugin, and restore the
 # controller's default (all channels usable) host classification.
 # Part of rtl8852ce-bt-coex by Hamza Gouda (GPL-2.0)

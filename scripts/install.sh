@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-2.0-only
 # Install the permanent RTL8852CE Bluetooth/Wi-Fi coexistence fix.
 # Part of rtl8852ce-bt-coex by Hamza Gouda (GPL-2.0)
 #
