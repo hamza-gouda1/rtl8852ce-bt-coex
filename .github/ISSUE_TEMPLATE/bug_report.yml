@@ -1,0 +1,20 @@
+name: Bug report
+description: A script or service did not do what the documentation says
+labels: [bug]
+body:
+  - type: input
+    id: model
+    attributes:
+      label: Laptop model, kernel version, distribution
+    validations: {required: true}
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what did you expect?
+    validations: {required: true}
+  - type: textarea
+    id: logs
+    attributes:
+      label: Script output or logs
+      description: Most scripts write logs on failure. Remove anything personal.
+      render: text

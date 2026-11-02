@@ -1,0 +1,25 @@
+name: btc_info dump from your hardware
+description: Share coexistence telemetry from an RTL8852CE (or 8852B/8851B) laptop
+labels: [hardware]
+body:
+  - type: input
+    id: model
+    attributes:
+      label: Laptop model
+    validations: {required: true}
+  - type: input
+    id: kernel
+    attributes:
+      label: Kernel version and linux-firmware package version
+    validations: {required: true}
+  - type: textarea
+    id: dump
+    attributes:
+      label: Output of `sudo cat /sys/kernel/debug/rtw89/btc_info`
+      description: The `BT_FW_coex:` and `afh_map:` lines matter most. Remove anything personal.
+      render: text
+    validations: {required: true}
+  - type: textarea
+    id: notes
+    attributes:
+      label: Do you hear Bluetooth stutter while Wi-Fi is busy?
