@@ -12,7 +12,7 @@ jobs:
   shellcheck:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Lint shell scripts
         run: shellcheck --version && shellcheck -S warning scripts/*.sh scripts/bt-afh-guard
       - name: Syntax check
