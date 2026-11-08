@@ -171,6 +171,11 @@ at −70 dBm, i.e. the shared radio briefly struggling at the edge of range. The
 earbuds' buffer covered it and nothing was audible. If dropouts ever become
 audible under heavy downloads, the next step is on the router (below).
 
+A later [controlled SBC rerun](MEASUREMENTS.md#controlled-sbc-rerun-2026-11-08)
+kept the codec and requested Wi-Fi load fixed. Both host classifications produced
+live maps with zero Wi-Fi overlap, even after reconnecting the earbuds. The
+rerun therefore could not isolate the benefit of avoiding overlapping channels.
+
 ## 6. Router settings that help further
 
 - **Channel width 20 MHz on 2.4 GHz.** A 40 MHz channel blocks 45 of 79 BT
