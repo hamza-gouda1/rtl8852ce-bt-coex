@@ -36,9 +36,10 @@ SBC-XQ ~456 kbps), 2.4 GHz-only networks. Stall = ACL delivery gap > 50 ms.
 | 4 | `OFF_BT` (BT exclusive) | **3.18** | 15.64 | 366 ms |
 | 5 | auto (restore, control) | 1.62 | 5.99 | 283 ms |
 
-**Reading:** BT-exclusive made stutter *worse* → airtime starvation is not the
-dominant mechanism; RF-level packet collisions (dead AFH) are. PS-TDMA gives a
-real but partial improvement.
+**Reading** — BT-exclusive increased stalls and PS-TDMA reduced them in this
+short comparison. The results support a coexistence investigation but do not
+isolate RF collisions as the dominant mechanism. The controlled rerun below
+records the limits of the causal evidence.
 
 ## v1.0 validation (bt-afh-guard active, AAC codec)
 

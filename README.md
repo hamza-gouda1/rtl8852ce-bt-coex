@@ -1,28 +1,27 @@
-# RTL8852CE Bluetooth/Wi-Fi Coexistence Toolkit for Linux
+# RTL8852CE Coexistence Investigation and Single-Laptop Workaround
 
 ![License](https://img.shields.io/badge/license-GPL--2.0-blue)
 ![Platform](https://img.shields.io/badge/platform-Linux-blue)
 ![Kernel](https://img.shields.io/badge/tested_kernel-7.0.13-orange)
 ![Hardware](https://img.shields.io/badge/hardware-Realtek_RTL8852CE-red)
-![Status](https://img.shields.io/badge/status-fixed_(v1.0)-brightgreen)
+![Status](https://img.shields.io/badge/status-validated_on_one_laptop-orange)
 [![shellcheck](https://github.com/hamza-gouda1/rtl8852ce-bt-coex/actions/workflows/shellcheck.yml/badge.svg)](https://github.com/hamza-gouda1/rtl8852ce-bt-coex/actions/workflows/shellcheck.yml)
 
-**Bluetooth audio stuttering the moment 2.4 GHz Wi-Fi carries traffic — on a
-Realtek RTL8852CE laptop?** This repository explains *why* it happens, proves
-it with telemetry from the card's own coexistence engine, and ships the tools
-that fix, measure, and repair it.
+**Bluetooth audio stuttering while 2.4 GHz Wi-Fi is busy on an RTL8852CE laptop?**
+This repository documents a strongly indicated firmware coexistence problem,
+measurements from one ASUS laptop, and an AFH/AAC workaround validated on that laptop.
 
-> **The one-sentence diagnosis:** on Linux, the two firmware halves of the
-> RTL8852CE never complete their coexistence handshake (BT reports coex
-> version **0**, the Wi-Fi side requires **7**), so adaptive frequency hopping
-> never engages and Bluetooth hops straight through the Wi-Fi channel —
-> packet-level RF collisions that no amount of time-slot tuning can fix.
+The initial captures showed a firmware coexistence version mismatch, an empty
+Wi-Fi-side AFH report, and frequent audio delivery stalls. These observations
+strongly indicate a coordination problem. The workaround produced clean audio
+in the recorded single-laptop validation with Wi-Fi as the only network link.
 
-> **v1.0 — fixed.** A small service (`bt-afh-guard`) now delivers the missing
-> "avoid the Wi-Fi channel" map to the Bluetooth controller itself, at boot and
-> on every channel change, and an optional AAC codec build cuts Bluetooth
-> airtime in half. Validated with Wi-Fi as the only link under full download
-> load: **clean audio**. Full write-up: [`docs/SOLUTION.md`](docs/SOLUTION.md).
+The later controlled SBC rerun could not isolate the workaround's effect.
+Both host classifications resulted in live Bluetooth maps with zero measured
+Wi-Fi overlap. The rerun establishes neither a causal benefit from the guard
+nor compatibility across RTL8852CE laptops. Read the [measurements and experimental
+limits](docs/MEASUREMENTS.md#controlled-sbc-rerun-2026-11-08) alongside the
+[workaround instructions](docs/SOLUTION.md).
 
 <p align="center">
   <img src="docs/img/afh-channel-map.svg" alt="Bluetooth channel map: in v0.1 the map is empty and Bluetooth hops across all 79 channels, through the Wi-Fi signal; with bt-afh-guard it uses channels 0-23 and 77-78 only" width="760">
@@ -30,7 +29,7 @@ that fix, measure, and repair it.
 
 ---
 
-## Just fix it
+## Try the validated workaround
 
 No kernel build, no driver swap, no reboot. It works with the stock `rtw89` driver.
 
@@ -80,7 +79,7 @@ maps the gap on another hardware variant.
 | Coexistence mailbox messages rejected | **~50%** (41,154 NACKs) |
 | HCI-level anomalies (disconnects, errors) | 0 |
 
-And the experiment that pinned the mechanism down:
+The initial policy comparison used five 50-second phases.
 
 | Coex scheme (50 s each) | stalls/s | starved | worst gap |
 |---|---:|---:|---:|
@@ -88,26 +87,23 @@ And the experiment that pinned the mechanism down:
 | BT-exclusive (`OFF_BT`) — *no airtime competition at all* | **3.18** ✗ | 15.6 s | 366 ms |
 | PS-TDMA variant | **1.28** ✓ | 4.3 s | 128 ms |
 
-Giving Bluetooth the radio *exclusively* made stutter **worse** — proof that
-the loss is RF-level packet collision, not airtime starvation. Full data:
-[`docs/MEASUREMENTS.md`](docs/MEASUREMENTS.md).
+Selecting the BT-exclusive policy increased stalls, while the PS-TDMA variant
+reduced them. This supports further investigation of coexistence, but the
+policy comparison alone cannot establish RF collisions as the dominant cause.
+Full data and the controlled rerun are in [MEASUREMENTS.md](docs/MEASUREMENTS.md).
 
-## How the failure chain works
+## Indicated failure chain
 
 ```mermaid
 flowchart TD
-    A["Wi-Fi firmware<br/>coex 7.12.0 · wants BT coex v7"] <-->|"mailbox: ~50% NACKs"| B["BT firmware<br/>reports coex version 0"]
-    A -->|"AFH control H2C unsupported"| C["AFH map: EMPTY<br/>(121/121 samples)"]
-    B -->|"hops blindly across the band"| D["BT channels collide with<br/>the Wi-Fi channel"]
-    D --> E["packet-level RF collisions<br/>on the shared antenna"]
-    E --> F["A2DP audio: 488 stalls,<br/>74 s starved per 10 min"]
+    A["Observed firmware coex mismatch"] --> B["Strongly indicated coordination problem"]
+    C["Empty Wi-Fi-side AFH reports and mailbox NACKs"] --> B
+    B -.-> D["Possible shared-band interference"]
+    D -.-> E["Observed A2DP delivery stalls"]
 ```
 
-Windows never sees this because Realtek ships matched proprietary driver
-halves there. On Linux the halves are open-source driver + published firmware,
-and the coordination handshake simply doesn't complete — **for every
-RTL8852CE owner**. That makes this a genuine driver/firmware coordination gap,
-not one broken laptop.
+The measurements cover one laptop. Independent reports are needed to determine
+which other hardware and firmware combinations exhibit the same behavior.
 
 ## What's in the box
 
@@ -115,9 +111,9 @@ not one broken laptop.
 |---|---|
 | `patches/` | Two verified patches for the vanilla `rtw89` driver (7.0.13): **0001** enables the coexistence debugfs telemetry on kernels without `CONFIG_CFG80211_DEBUGFS` (liquorix et al.); **0002** adds live coex-policy tuning knobs (`/sys/module/rtw89_core/parameters/btc_policy_override`, `btc_w1_dur_ms`) |
 | `scripts/` | The full toolkit: verified module swap with auto-rollback, 10-minute correlated capture harness (HCI + traffic + coex state), policy A/B tester, **direct-AFH HCI workaround**, and a Bluetooth speaker repair kit |
-| `scripts/bt-afh-guard` + `systemd/` | **The v1.0 fix.** A persistent daemon that keeps the BT controller's AFH map in sync with the live Wi-Fi channel and width |
+| `scripts/bt-afh-guard` + `systemd/` | **The v1.0 workaround.** A persistent daemon that keeps the BT controller's AFH map in sync with the live Wi-Fi channel and width |
 | `scripts/build-aac-plugin.sh` | Builds PipeWire's AAC Bluetooth codec for your exact installed PipeWire version |
-| `scripts/install.sh` / `uninstall.sh` | One-command install and removal of the fix |
+| `scripts/install.sh` / `uninstall.sh` | One-command install and removal of the workaround |
 | `docs/` | [`SOLUTION.md`](docs/SOLUTION.md) · [`ROOT-CAUSE.md`](docs/ROOT-CAUSE.md) · [`MEASUREMENTS.md`](docs/MEASUREMENTS.md) · [`USAGE.md`](docs/USAGE.md) |
 | `data/` | Raw telemetry: 121 coex-state snapshots, traffic log, stall tables |
 
@@ -220,12 +216,12 @@ saturating it, A2DP played cleanly. The headphones' live hop map moved from
 
 <details>
 <summary><b>Will this fix my stutter?</b></summary>
-On the reference laptop, yes. With <code>bt-afh-guard</code> running, A2DP
+The workaround was validated on one reference laptop. With <code>bt-afh-guard</code> running, A2DP
 audio stayed clean while 2.4 GHz Wi-Fi was the only network link and was
 saturated by downloads. AAC (optional) lowers Bluetooth airtime further. If
 your Wi-Fi signal is very weak, also set the router's 2.4 GHz width to 20 MHz
 (see <a href="docs/SOLUTION.md">SOLUTION.md §6</a>). The capture harness still
-tells you objectively what <i>your</i> bottleneck is.
+helps investigate <i>your</i> setup. The controlled SBC rerun could not isolate the guard's effect.
 </details>
 
 <details>
@@ -292,8 +288,8 @@ tooling. Every number in these docs is reproducible from the scripts and raw
 telemetry in [`data/`](data/).
 
 If this repository diagnosed or fixed your laptop, please **star it** and
-share your `btc_info` dump — that telemetry is what turns one laptop's fix
-into every RTL8852CE owner's fix.
+share your `btc_info` dump and test conditions so compatibility can be checked
+on additional laptops.
 
 Scripts and docs are GPL-2.0-only; the kernel patches are GPL-2.0-only OR
 BSD-3-Clause, matching the upstream driver. See [`LICENSES/`](LICENSES/README.md).

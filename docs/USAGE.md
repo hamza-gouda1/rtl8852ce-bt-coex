@@ -20,7 +20,7 @@ Run order matters for some; each header explains itself.
   `btc_policy_override` module parameter (baseline → TDW1B1 → PS-TDMA →
   BT-exclusive → restore). Requires patch 0002.
 
-## The fix (v1.0) — start here
+## The workaround (v1.0) — validated on one laptop
 
 - **install.sh** — `sudo bash scripts/install.sh`. Installs `bt-afh-guard` as a
   systemd service, plus the AAC plugin if you built it. It prints the guard's

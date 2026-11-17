@@ -13,6 +13,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   every script and the systemd unit.
 
 ### Changed
+- Bound the diagnosis and workaround claims to the single-laptop measurements
+  and the controlled rerun, which could not isolate the AFH guard's effect.
 - `scripts/re-pair-p40i.sh` is now `scripts/re-pair-device.sh`. It and
   `fix-a2dp.sh` and `bt-reset-repair.sh` take the device's Bluetooth address
   as an argument (or `BT_DEV`) instead of a hardcoded one.
@@ -25,8 +27,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [1.0.0] - 2026-10-23
 
-The fix. Validated with Wi-Fi as the only link under saturating download
-load: clean A2DP audio. See `docs/SOLUTION.md`.
+Workaround validated on one laptop with Wi-Fi as the only link under
+saturating download load and clean A2DP audio. See `docs/SOLUTION.md`.
 
 ### Added
 - `scripts/bt-afh-guard` + `systemd/bt-afh-guard.service`. A persistent

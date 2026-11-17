@@ -1,10 +1,12 @@
-# The fix (v1.0): persistent direct-AFH + AAC
+# The workaround (v1.0) — direct-AFH and AAC on one laptop
 
-**Status: validated on the reference laptop.** Bluetooth A2DP audio plays
+**Status — validated on one reference laptop.** Bluetooth A2DP audio plays
 cleanly while 2.4 GHz Wi-Fi is fully loaded and Wi-Fi is the only network link.
 
-This document explains what the v1.0 fix does, why it works, how it was
-validated, and how to install, verify and remove it.
+The cause is strongly indicated by the initial telemetry. The workaround's
+combined AFH/AAC setup was validated on one laptop, while the controlled SBC
+rerun could not isolate the guard's effect. This document explains the setup,
+the measurements, and how to install, verify and remove it.
 
 ---
 
@@ -25,19 +27,18 @@ sudo bash scripts/install.sh
 
 ---
 
-## 1. Why AFH is the right lever
+## 1. Why AFH was investigated
 
-`ROOT-CAUSE.md` showed that the RTL8852CE's Wi-Fi and BT firmware never
-complete their coexistence handshake on Linux (BT reports coex v0, Wi-Fi wants
-v7). The consequence that matters is that **adaptive frequency hopping never
-learns where the Wi-Fi channel is**. The AFH map stayed empty in 121/121
-telemetry samples, so Bluetooth hops through all 79 channels, including the
-20–40 MHz block Wi-Fi is transmitting on.
+The initial telemetry in [ROOT-CAUSE.md](ROOT-CAUSE.md) strongly indicates a
+firmware coexistence coordination problem. The driver reported BT coex v0
+while expecting v7, and its Wi-Fi-side AFH report stayed empty in 121 samples.
+Those reports do not establish the actual live hop map on every Bluetooth link.
 
-The policy A/B in `MEASUREMENTS.md` showed that giving Bluetooth *exclusive*
-airtime made things worse. So the loss is RF collision on shared frequencies,
-not starvation of time slots. Fixing that needs frequency separation, which is
-exactly what AFH provides.
+The policy A/B comparison made stutter worse under the BT-exclusive setting.
+That observation motivates investigation of channel overlap, but does not
+isolate collisions as the dominant mechanism. In the later controlled SBC
+rerun, the live maps excluded Wi-Fi overlap in both conditions, preventing
+an isolated measurement of the AFH guard's benefit.
 
 AFH classification does not have to come from the Wi-Fi firmware. The
 Bluetooth Core Specification defines a host command for it:
@@ -163,7 +164,7 @@ ACL TX counter. The AAC stream needs ~46–47 packets/s; a stall shows as a drop
 | **Ethernet unplugged**, Wi-Fi only, single download | ~1 Mbit/s | 47 pkts/s steady | clean |
 | **Ethernet unplugged**, two parallel downloads | ramping to ~6.5 Mbit/s (link max at this signal) | 47 pkts/s for 16 s, then one ~10 s dip during a Wi-Fi beacon-loss event | **clean throughout** |
 
-Before the fix, the same headphones logged **488 stalls >50 ms per 10 min**
+The initial baseline with the same headphones logged **488 stalls >50 ms per 10 min**
 with Wi-Fi only "idle-ish" (`MEASUREMENTS.md`).
 
 The single counter dip happened together with a Wi-Fi `CTRL-EVENT-BEACON-LOSS`
@@ -192,7 +193,7 @@ rerun therefore could not isolate the benefit of avoiding overlapping channels.
 
 ## 7. Other things found on the reference laptop
 
-These are not the root cause, but they are worth checking on any affected
+These additional issues may affect audio and can be checked on an affected
 machine:
 
 - **Regulatory domain "00" (world).** It restricts 5 GHz to passive scan and

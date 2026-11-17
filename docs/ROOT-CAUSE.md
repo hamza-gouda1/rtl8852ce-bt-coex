@@ -1,4 +1,4 @@
-# Root Cause: RTL8852CE BT/Wi-Fi coexistence on Linux
+# Strongly Indicated Cause — RTL8852CE Firmware Coexistence
 
 ## Hardware topology
 
@@ -17,9 +17,9 @@ and mount anyway; the result is `/sys/kernel/debug/rtw89/btc_info`, a full dump
 of the coexistence engine: protocol versions, link state, TDMA slot tables,
 mailbox statistics, AFH maps.
 
-## The failure chain
+## Observations and indicated failure chain
 
-1. **Protocol handshake fails.** The BTC driver wants BT coex protocol v7
+1. **Protocol version mismatch is reported.** The BTC driver wants BT coex protocol v7
    (`bt_desired: 7`). The BT firmware (upstream `rtl_bt/rtl8852cu_fw_v2`,
    verified byte-identical to linux-firmware HEAD) reports version **0**.
    Observed continuously across a 10-minute capture (121 snapshots).
@@ -29,28 +29,31 @@ mailbox statistics, AFH maps.
    everything except the passive BT-report channel (`fcxbtcrpt`, works) and the
    TDMA channel (`fcxtdma`, version-mismatched: firmware speaks v4, driver
    composes v3).
-3. **AFH never engages.** With the AFH control path dead, the BT controller's
-   AFH map stays empty. Wi-Fi on channel 9 or 11 sits inside BT's hop range, so
-   every WLAN transmission is a potential packet collision for the BT link.
+3. **The Wi-Fi-side AFH report stays empty.** This suggests a failed channel
+   coordination path. The report alone does not determine the Bluetooth
+   controller's live hop map, which needs an independent HCI read.
 4. **The mailbox half-works.** A2DP-related mailbox messages accumulate NACKs
    at a ~50% rate during playback (41,154 NACKs / 10 min), plus recurring
    `len-mismatch` errors in the coex DM.
 
 ## Why audio stutters
 
-With no AFH, BT is reduced to time-sharing the band blind. Measured over 600 s
-of A2DP playback (37,149 ACL frames): **488 delivery stalls >50 ms, 74 s of
-accumulated starvation (12.3%)**, worst single gap 283 ms — 14× longer than the
-20 ms WLAN slot the active policy (`AUTO_TD20B1`) promises. The policy is not
-being enforced as designed.
+The initial 600-second capture contained 37,149 ACL frames and 488 delivery
+gaps over 50 ms, totaling 74 seconds of gaps. These host-level delivery gaps
+measure transport timing, rather than directly measuring audible silence or
+RF collisions.
 
-The decisive experiment: forcing **BT-exclusive** coexistence (`OFF_BT`) —
-which should eliminate all airtime competition — made stutter *worse*
-(3.18 stalls/s vs 1.68 baseline), while a PS-TDMA policy variant improved it
-(1.28 stalls/s). Conclusion: the dominant loss mechanism is **packet-level RF
-collision on the shared band, not airtime arbitration** — which is why slot
-tuning alone cannot fix it and why AFH (frequency separation) is the correct
-target.
+Selecting the BT-exclusive policy increased the stall rate from 1.68 to 3.18
+per second, while a PS-TDMA variant reduced it to 1.28. Combined with the
+reported firmware mismatch and mailbox failures, this strongly indicates a
+coexistence coordination problem. The experiment cannot establish that a
+particular interference mechanism dominates.
+
+The [controlled SBC rerun](MEASUREMENTS.md#controlled-sbc-rerun-2026-11-08)
+kept the codec and requested load fixed, but both classifications already had
+zero measured Wi-Fi overlap in the live link maps. It could not isolate the
+workaround's effect. Additional hardware and a test that produces distinct
+live maps are needed to test that causal explanation.
 
 ## The workaround
 
@@ -58,9 +61,9 @@ BT controllers accept their channel-avoidance map directly from the host via a
 standard HCI command — `Set AFH Host Channel Classification` (OGF 0x03, OCF
 0x003F, 10-byte channel bitmask) — no vendor mailbox required. Mapping the live
 Wi-Fi frequency to BT channels (`f = 2402 + n MHz`) and masking that block
-gives the BT side the frequency separation the broken mailbox was supposed to
-provide. This is the same information Realtek's Windows drivers deliver
-automatically.
+supplies an additional channel-avoidance hint to the Bluetooth controller.
+The combined AFH/AAC workaround was validated on one laptop. The controlled
+rerun leaves the guard's independent contribution unresolved.
 
 Bit polarity matters: in the 80-bit map, **1 = usable ("unknown"), 0 = bad**,
 bit 79 is reserved, and at least 20 channels must stay usable. The v0.1 test
