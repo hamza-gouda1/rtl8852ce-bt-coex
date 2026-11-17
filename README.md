@@ -24,7 +24,7 @@ limits](docs/MEASUREMENTS.md#controlled-sbc-rerun-2026-11-08) alongside the
 [workaround instructions](docs/SOLUTION.md).
 
 <p align="center">
-  <img src="docs/img/afh-channel-map.svg" alt="Bluetooth channel map: in v0.1 the map is empty and Bluetooth hops across all 79 channels, through the Wi-Fi signal; with bt-afh-guard it uses channels 0-23 and 77-78 only" width="760">
+  <img src="docs/img/afh-channel-map.svg" alt="Example host AFH classifications with all 79 channels allowed and a restricted mask. The controller combines these hints with its own assessment." width="760">
 </p>
 
 ---
@@ -84,7 +84,7 @@ The initial policy comparison used five 50-second phases.
 | Coex scheme (50 s each) | stalls/s | starved | worst gap |
 |---|---:|---:|---:|
 | Default (auto) | 1.68 | 7.0 s | 283 ms |
-| BT-exclusive (`OFF_BT`) — *no airtime competition at all* | **3.18** ✗ | 15.6 s | 366 ms |
+| BT-exclusive policy (`OFF_BT`) | **3.18** ✗ | 15.6 s | 366 ms |
 | PS-TDMA variant | **1.28** ✓ | 4.3 s | 128 ms |
 
 Selecting the BT-exclusive policy increased stalls, while the PS-TDMA variant
@@ -204,9 +204,10 @@ hcitool cmd 0x03 0x003F <10-byte mask>    # bit n = BT channel n: 1 = usable, 0 
 the live center frequency **and width**, re-sends after controller resets and
 channel changes, and runs as a systemd service.
 
-**Status:** validated. With Wi-Fi as the only link and two parallel downloads
-saturating it, A2DP played cleanly. The headphones' live hop map moved from
-"all 79 channels" to **channels 0–23 and 77–78 only**.
+**Status — validated on one laptop.** With Wi-Fi as the only link and two
+parallel downloads, A2DP played cleanly. A recorded live map used channels
+0–23 and 77–78. In the later controlled SBC rerun, both classifications
+already excluded Wi-Fi overlap, so that rerun could not isolate the guard's effect.
 
 > v0.1's `afh-test2.sh` had the mask polarity inverted. It confined Bluetooth
 > *to* the Wi-Fi block instead of away from it. That is corrected in v1.0;

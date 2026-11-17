@@ -1,12 +1,12 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 812 250" width="812" height="250" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" role="img" aria-labelledby="t d">
-<title id="t">Bluetooth channel map before and after bt-afh-guard</title>
-<desc id="d">v0.1: the AFH map was empty in 121 of 121 samples, so Bluetooth hopped across all 79 channels, including the Wi-Fi channel. v1.0: bt-afh-guard sets the map to channels 0-23 and 77-78 only.</desc>
+<title id="t">Example host AFH classifications</title>
+<desc id="d">The open host classification allows all 79 channels. The guard example allows channels 0-23 and 77-78. The controller also assesses channels itself. The controlled rerun had zero measured Wi-Fi overlap in both live maps and could not isolate the guard's effect.</desc>
 <rect width="812" height="250" rx="10" fill="#ffffff"/>
-<text x="20" y="30" font-size="15" font-weight="700" fill="#1f2328">Where Bluetooth is allowed to hop (79 channels, 2402–2480 MHz)</text>
+<text x="20" y="30" font-size="15" font-weight="700" fill="#1f2328">Example host AFH hints (79 channels, 2402–2480 MHz)</text>
 <text x="20" y="50" font-size="12" fill="#59636e">Router on Wi-Fi channel 11, 40 MHz. Each cell is one 1 MHz Bluetooth channel.</text>
 <rect x="390" y="66" width="328" height="122" fill="#fff1e5" stroke="#d1700f" stroke-dasharray="4 3"/>
 <text x="554.0" y="80" font-size="11" text-anchor="middle" fill="#a3510b">Wi-Fi signal, 2432–2472 MHz</text>
-<text x="20" y="109" font-size="13" font-weight="600" fill="#1f2328">v0.1  stock</text>
+<text x="20" y="109" font-size="13" font-weight="600" fill="#1f2328">Open mask</text>
 <rect x="150.5" y="92" width="7" height="26" fill="#0969da"/>
 <rect x="158.5" y="92" width="7" height="26" fill="#0969da"/>
 <rect x="166.5" y="92" width="7" height="26" fill="#0969da"/>
@@ -86,8 +86,8 @@
 <rect x="758.5" y="92" width="7" height="26" fill="#0969da"/>
 <rect x="766.5" y="92" width="7" height="26" fill="#0969da"/>
 <rect x="774.5" y="92" width="7" height="26" fill="#0969da"/>
-<text x="150" y="132" font-size="11" fill="#59636e">AFH map empty (121/121 samples)</text>
-<text x="20" y="163" font-size="13" font-weight="600" fill="#1f2328">v1.0  bt-afh-guard</text>
+<text x="150" y="132" font-size="11" fill="#59636e">Host allows all 79 channels; live controller map may differ</text>
+<text x="20" y="163" font-size="13" font-weight="600" fill="#1f2328">Guard mask</text>
 <rect x="150.5" y="146" width="7" height="26" fill="#0969da"/>
 <rect x="158.5" y="146" width="7" height="26" fill="#0969da"/>
 <rect x="166.5" y="146" width="7" height="26" fill="#0969da"/>
@@ -171,7 +171,7 @@
 <text x="154.0" y="214" font-size="10" text-anchor="middle" fill="#59636e">ch 0</text>
 <text x="346.0" y="214" font-size="10" text-anchor="middle" fill="#59636e">ch 24</text>
 <text x="770.0" y="214" font-size="10" text-anchor="middle" fill="#59636e">ch 77</text>
-<rect x="150" y="226" width="10" height="10" fill="#0969da"/><text x="166" y="235" font-size="11" fill="#1f2328">used</text>
+<rect x="150" y="226" width="10" height="10" fill="#0969da"/><text x="166" y="235" font-size="11" fill="#1f2328">allowed</text>
 <rect x="220" y="226" width="10" height="10" fill="#e6e8eb" stroke="#c8ccd1"/><text x="236" y="235" font-size="11" fill="#1f2328">avoided</text>
-<text x="792" y="235" font-size="10" text-anchor="end" fill="#59636e">Source: docs/MEASUREMENTS.md (HCI Read AFH Channel Map)</text>
+<text x="792" y="235" font-size="10" text-anchor="end" fill="#59636e">Host classification example; see MEASUREMENTS.md</text>
 </svg>
