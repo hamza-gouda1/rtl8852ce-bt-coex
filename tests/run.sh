@@ -175,6 +175,10 @@ t "verified sender: hci_send via stubbed hcitool fallback"
 cat > "$STUBBIN/hcitool" <<'EOF'
 #!/bin/bash
 # Test stub for hcitool: replays canned Command Complete dumps.
+if [ "${1:-}" = "con" ]; then
+    printf 'Connections:\n\t> ACL 98:47:44:A0:D1:65 handle 4 state 1 lm CENTRAL AUTH ENCRYPT\n'
+    exit 0
+fi
 case "${HCITOOL_STUB_CASE:-ok}" in
     ok)      printf '< HCI Command: Set AFH Host Channel Classification (0x03|0x003f) plen 10\n> HCI Event: Command Complete (0x0e) plen 6\n      01 3F 0C 00\n' ;;
     reject)  printf '< HCI Command: Set AFH Host Channel Classification (0x03|0x003f) plen 10\n> HCI Event: Command Complete (0x0e) plen 6\n      01 3F 0C 12\n' ;;
@@ -211,6 +215,23 @@ HCITOOL_STUB_CASE=nocc hci_send hci0 0x03 0x003F $ALL_USABLE >"$TMP_OUT"
 rc=$?
 assert_eq "" "$HCI_STATUS" "hcitool fallback: NO-CC leaves HCI_STATUS empty"
 assert_eq "1" "$rc" "hcitool fallback: NO-CC -> rc 1"
+
+# ---------------------------------------------------------------------------
+t "live-map readback: handle enumeration, map extraction, overlap count"
+# ---------------------------------------------------------------------------
+export PATH="$STUBBIN:$PATH"   # stub hcitool: `hcitool con` -> one ACL handle 4
+assert_eq "4" "$(list_acl_handles)" "list_acl_handles: hcitool con -> ACL handle 4"
+
+export HCISTUB_STATUS=0x00 HCISTUB_RC=0 HCISTUB_PARAMS="0x04 0x00 0xFF 0xFF 0xFF 0x00 0x00 0x00 0x00 0x00 0x00 0x60"
+export HCI_CMD_PY="$STUBBIN/hci-cmd.py"
+m=$(read_live_map 4)
+assert_eq "0xFF 0xFF 0xFF 0x00 0x00 0x00 0x00 0x00 0x00 0x60" "$m" "read_live_map: skips the 2-byte handle prefix"
+
+# the measured v1.0 live map (channels 0-23 and 77-78) vs the ch11/40 block
+LIVE="0xFF 0xFF 0xFF 0x00 0x00 0x00 0x00 0x00 0x00 0x60"
+assert_eq "0" "$(overlap_count "$LIVE" 2430 2474)" "overlap: measured v1.0 live map vs ch11/40 block = 0"
+assert_eq "23" "$(overlap_count "$LIVE" 2400 2424)" "overlap: same map vs ch1/20 block = 23 live channels inside"
+assert_eq "1" "$(overlap_count "0xFF 0xFF 0xFF 0x40 0x00 0x00 0x00 0x00 0x00 0x60" 2430 2474)" "overlap: ch30 set -> 1"
 
 # restore PATH polluted by the stub-backed tests
 PATH="$ORIG_PATH"

@@ -200,6 +200,71 @@ controller_alive() {   # returns 0 when $HCI answers Read_Local_Version_Info (re
 }
 
 # ---------------------------------------------------------------------------
+# Live-map readback (HCI_Read_AFH_Channel_Map, OGF 0x05 / OCF 0x0006, per ACL
+# handle). Bit n = 1 means the controller's hop map currently uses channel n.
+# ---------------------------------------------------------------------------
+
+list_acl_handles() {   # prints connected ACL handles, one per line; empty when nothing is connected or no enumerator exists
+    local line
+    if command -v hcitool >/dev/null 2>&1; then
+        hcitool con 2>/dev/null | grep -oP 'ACL .*handle \K[0-9]+' || true
+        return 0
+    fi
+    if [ -n "$HCI_CMD_PY" ]; then
+        while IFS= read -r line; do
+            if [[ "$line" == handle\ * && "$line" == *"type 1 "* ]]; then
+                line=${line#handle }; echo ${line%% *}
+            fi
+        done < <("$HCI_CMD_PY" --list-conns --hci "$HCI" 2>/dev/null)
+    fi
+}
+
+read_live_map() {   # $1 = ACL handle; prints the live AFH map as 10 hex bytes, or returns 1 on failure
+    local out i m=""
+    out=$(hci_send "$HCI" 0x05 0x0006 "$(printf '0x%02X' $(( $1 & 0xFF )))" "$(printf '0x%02X' $(( ($1 >> 8) & 0xFF )))" 2>/dev/null) || return 1
+    local -a p
+    read -r -a p <<<"$out"
+    [ "${#p[@]}" -ge 12 ] || return 1
+    for ((i = 2; i < 12; i++)); do
+        m+=" ${p[i]}"
+    done
+    echo "${m# }"
+}
+
+overlap_count() {   # $1 = live map (10 hex bytes), $2 lo MHz, $3 hi MHz -> number of live channels inside the block
+    local -a M
+    read -r -a M <<<"$1"
+    local lo=$(( $2 - 2402 )) hi=$(( $3 - 2402 )) n c=0
+    (( lo < 0 )) && lo=0
+    (( hi > 78 )) && hi=78
+    for ((n = lo; n <= hi; n++)); do
+        (( M[n/8] & (1 << (n%8)) )) && c=$((c+1))
+    done
+    echo "$c"
+}
+
+report_live_maps() {   # $1 lo MHz, $2 hi MHz ("" = no Wi-Fi block); prints one compact line per connected ACL handle
+    local h m used ovl
+    for h in $(list_acl_handles); do
+        m=$(read_live_map "$h") || { echo "live map handle $h: read failed (status ${HCI_STATUS:-no verdict})"; continue; }
+        used=$(mask_usable_count "$m")
+        if [ -n "$1" ]; then
+            ovl=$(overlap_count "$m" "$1" "$2")
+            echo "live map handle $h: $used ch used, $ovl overlap with Wi-Fi $1-$2 MHz"
+        else
+            echo "live map handle $h: $used ch used, no Wi-Fi block"
+        fi
+    done
+}
+
+log_live_maps() {   # $1 lo MHz, $2 hi MHz; logs report_live_maps output to the journal
+    local line
+    while IFS= read -r line; do
+        [ -n "$line" ] && log "$line"
+    done < <(report_live_maps "$1" "$2")
+}
+
+# ---------------------------------------------------------------------------
 # Main program. Guarded so tests can source this file without starting the loop.
 # ---------------------------------------------------------------------------
 
@@ -216,6 +281,21 @@ if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
             echo "         sending the all-usable map instead (cannot honor the block)"
         fi
         echo "HCI mask: $mask ($usable/79 channels usable)"
+        exit 0
+    fi
+
+    # --status: Wi-Fi block, host mask, backend, and each link's live map (root)
+    if [ "${1:-}" = "--status" ]; then
+        hci_backend || true
+        if [ -z "$HCI_BACKEND" ]; then
+            echo "no verified HCI backend (scripts/hci-cmd.py or bluez hcitool needed)"
+            exit 1
+        fi
+        echo "backend: $HCI_BACKEND"
+        read -r lo hi <<<"$(wifi_block)"
+        echo "Wi-Fi block: ${lo:-none}-${hi:-none} MHz"
+        echo "Host mask: $(build_mask "$lo" "$hi")"
+        report_live_maps "$lo" "$hi"
         exit 0
     fi
 
@@ -244,6 +324,7 @@ if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
                 if hci_send "$HCI" 0x03 0x003F $mask >/dev/null; then
                     [ "$mask" != "$last" ] && log "avoiding ${lo:-none}-${hi:-none} MHz; mask: $mask"
                     last="$mask"; last_sent=$now
+                    log_live_maps "$lo" "$hi"   # verify: read the live controller map back per link
                 else
                     if [ -n "$HCI_STATUS" ]; then
                         log "AFH set rejected: status $HCI_STATUS"
@@ -255,6 +336,7 @@ if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
             elif (( now - last_sent >= REFRESH )); then
                 if hci_send "$HCI" 0x03 0x003F $mask >/dev/null; then
                     last_sent=$now
+                    log_live_maps "$lo" "$hi"   # refresh re-send: also read back and log the live map
                 else
                     log "AFH refresh failed: status ${HCI_STATUS:-no verdict}"
                 fi
