@@ -44,8 +44,15 @@ def per_sample_deltas(rows):
     """Cumulative counters -> per-sample deltas; negative deltas (resets) clamp to 0."""
     out = []
     prev = {}
+    prev_ts = None
     for r in rows:
+        ts = _float(r.get("ts"))
+        # Real elapsed time since the previous sample: one loop iteration runs
+        # iw/pactl and takes longer than its 2 s sleep, so rows are not exactly 2 s apart.
+        dt = ts - prev_ts if ts is not None and prev_ts is not None and ts > prev_ts else 2.0
+        prev_ts = ts if ts is not None else prev_ts
         d = {
+            "dt": dt,
             "a2dp": r.get("a2dp") or "UNKNOWN",
             "signal": _float(r.get("signal_dbm")),
             "tx_kbits": _float(r.get("tx_kbits")),
@@ -72,7 +79,7 @@ def main():
             groups[d["a2dp"]].append(d)
 
     def duration(g):
-        return len(g) * 2   # samples at a fixed 2 s cadence
+        return sum(d["dt"] for d in g)
 
     def rate(g, k):
         dur = max(1, duration(g))
@@ -91,8 +98,8 @@ def main():
     print()
     print("| Metric | A2DP RUNNING | A2DP SUSPENDED |")
     print("|---|---:|---:|")
-    print(f"| Samples (2 s each) | {len(groups['RUNNING'])} | {len(groups['SUSPENDED'])} |")
-    print(f"| Duration | {duration(groups['RUNNING'])} s | {duration(groups['SUSPENDED'])} s |")
+    print(f"| Samples | {len(groups['RUNNING'])} | {len(groups['SUSPENDED'])} |")
+    print(f"| Duration | {duration(groups['RUNNING']):.0f} s | {duration(groups['SUSPENDED']):.0f} s |")
     print(f"| Beacon loss / s | {rate(groups['RUNNING'], 'beacon_loss'):.2f} | {rate(groups['SUSPENDED'], 'beacon_loss'):.2f} |")
     print(f"| TX retries / s | {rate(groups['RUNNING'], 'tx_retries'):.2f} | {rate(groups['SUSPENDED'], 'tx_retries'):.2f} |")
     print(f"| TX failed / s | {rate(groups['RUNNING'], 'tx_failed'):.2f} | {rate(groups['SUSPENDED'], 'tx_failed'):.2f} |")

@@ -68,19 +68,40 @@ HANDLE=${2:-}
 [ -n "$HANDLE" ] || { echo "[FAIL] no connected ACL link -- connect the earbuds first" >&2; exit 1; }
 echo "[*] measuring ACL handle $HANDLE"
 
+# The running guard would re-apply its own mask within one REFRESH period and
+# silently undo the open/confined phases: pause it and restore on any exit.
+GUARD_WAS_ACTIVE=0
+if systemctl is-active --quiet bt-afh-guard 2>/dev/null; then
+    GUARD_WAS_ACTIVE=1
+    systemctl stop bt-afh-guard
+    echo "[*] bt-afh-guard paused for the experiment (restarted on exit)"
+fi
+restore() {
+    if [ "$GUARD_WAS_ACTIVE" -eq 1 ]; then
+        systemctl start bt-afh-guard && echo "[*] bt-afh-guard restarted"
+    else
+        # shellcheck disable=SC2086  # the mask MUST be word-split into 10 separate hex arguments
+        hci_send "$HCI" 0x03 0x003F $RESTRICTED >/dev/null && echo "[*] restricted mask restored"
+    fi
+}
+trap restore EXIT
+
 DIR="$HERE/positive-control-$(date +%H%M%S)"
 mkdir -p "$DIR"
 
 # --- ACL gap counting from the decoded btmon text ---
 tx_seconds() {   # $1 = decoded btmon text, $2 = handle -> ACL TX timestamps in seconds (one per line)
+    # btmon -r prints e.g.
+    #   < ACL Data TX: Handle 2 flags 0x00 dlen 679     #15 [hci0] 22.631132
+    # (seconds since the trace started; with -t/-T the last field is a
+    # wall-clock HH:MM:SS.ffffff, which is handled too).
     awk -v h="$2" '
-        $0 ~ /[Aa][Cc][Ll] [Dd]ata TX/ && $0 ~ ("handle " h "([^0-9]|$)") {
-            ts = ""
-            for (i = NF; i >= 1; i--)
-                if ($i ~ /^[0-9][0-9][:.][0-9][0-9][:.][0-9][0-9]\.[0-9][0-9][0-9][0-9][0-9][0-9]$/) { ts = $i; break }
-            if (ts != "") {
-                split(ts, t, /[:.]/)
-                printf "%.6f\n", t[1] * 3600 + t[2] * 60 + t[3] + t[4] / 1000000
+        $0 ~ ("^< ACL Data TX: Handle " h " ") {
+            ts = $NF
+            if (ts ~ /^[0-9]+\.[0-9]+$/) { print ts; next }
+            if (ts ~ /^[0-9][0-9]:[0-9][0-9]:[0-9][0-9]\.[0-9]+$/) {
+                split(ts, t, ":")
+                printf "%.6f\n", t[1] * 3600 + t[2] * 60 + t[3]
             }
         }' "$1"
 }
@@ -145,4 +166,3 @@ for p in open restricted confined; do
 done
 echo
 echo "Raw traces: $DIR (btmon files, decoded text, tx timestamps, ping output)."
-echo "If the bt-afh-guard service is running it re-applies its own mask within one cycle."

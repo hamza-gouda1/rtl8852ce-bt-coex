@@ -33,7 +33,7 @@ Run order matters for some; each header explains itself.
   - `--dry-run` — print the Wi-Fi block and the exact mask that would be sent
     (no root needed). Warns when the block would leave fewer than 20 usable
     channels.
-  - `--status` (root) — backend, Wi-Fi block, host mask, and the **live AFH
+  - `--status` — backend, Wi-Fi block, host mask, and the **live AFH
     hop map of every connected link** with its overlap against the Wi-Fi
     block. Read-only.
   - `--once` — run one daemon cycle and exit.

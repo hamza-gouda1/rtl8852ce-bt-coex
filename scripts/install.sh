@@ -34,7 +34,9 @@ fi
 # Source the daemon for the verified sender (hci_backend / hci_send) so the
 # logic exists exactly once, in scripts/bt-afh-guard.
 # shellcheck disable=SC1091
+WANT_HCI=$HCI
 source "$REPO/scripts/bt-afh-guard"
+HCI=$WANT_HCI   # the sourced defaults must not override the caller's choice
 
 if [ ! -d "/sys/class/bluetooth/$HCI" ]; then
     echo "[FAIL] controller $HCI not present in /sys/class/bluetooth/"
@@ -83,24 +85,13 @@ else
     echo "[i] AAC plugin not built -- skipped (optional: bash scripts/build-aac-plugin.sh)"
 fi
 
-# 3) Show the hop map the connected device actually uses (HCI Read AFH Channel Map)
-H=""
-if command -v hcitool >/dev/null 2>&1; then
-    H=$(hcitool con 2>/dev/null | grep -oP 'handle \K[0-9]+' | head -1 || true)
-elif [ -n "$HCI_CMD_PY" ]; then
-    for line in $("$HCI_CMD_PY" --list-conns --hci "$HCI"); do
-        if [[ "$line" == handle\ * ]]; then
-            H=${line#handle }; H=${H%% *}
-            break
-        fi
-    done
-fi
-if [ -n "$H" ]; then
-    echo "[i] Live link AFH map for handle $H (bit n = 1: channel n in use):"
-    if out=$(hci_send "$HCI" 0x05 0x0006 "$(printf '0x%02X 0x%02X' $(( H & 0xFF )) $(( (H >> 8) & 0xFF )))"); then
-        echo "     $out"
-    else
-        echo "[i] live-map read failed: status ${HCI_STATUS:-no verdict}"
-    fi
+# 3) Show the hop map each connected device actually uses (HCI Read AFH Channel Map)
+read -r LO HI <<<"$(wifi_block)"
+LIVE=$(report_live_maps "$LO" "$HI")
+if [ -n "$LIVE" ]; then
+    echo "[i] Live link AFH maps (Wi-Fi block ${LO:-none}-${HI:-none} MHz):"
+    sed 's/^/     /' <<<"$LIVE"
+else
+    echo "[i] no connected Bluetooth link -- connect the earbuds, then run: sudo bt-afh-guard --status"
 fi
 echo "DONE"

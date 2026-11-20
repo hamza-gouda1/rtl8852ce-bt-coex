@@ -373,7 +373,7 @@ bt-afh-guard $GUARD_VERSION — keep Bluetooth away from the active 2.4 GHz Wi-F
 Usage: bt-afh-guard [MODE]
   (no mode)   run as a daemon
   --dry-run   print the Wi-Fi block and the mask that would be sent (no root needed)
-  --status    backend, Wi-Fi block, host mask and the live map of every connected link (root)
+  --status    backend, Wi-Fi block, host mask and the live map of every connected link
   --once      run one daemon cycle and exit
   --version   print the version
   --help      this text
