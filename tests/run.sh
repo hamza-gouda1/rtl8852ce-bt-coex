@@ -233,6 +233,46 @@ assert_eq "0" "$(overlap_count "$LIVE" 2430 2474)" "overlap: measured v1.0 live 
 assert_eq "23" "$(overlap_count "$LIVE" 2400 2424)" "overlap: same map vs ch1/20 block = 23 live channels inside"
 assert_eq "1" "$(overlap_count "0xFF 0xFF 0xFF 0x40 0x00 0x00 0x00 0x00 0x00 0x60" 2430 2474)" "overlap: ch30 set -> 1"
 
+# ---------------------------------------------------------------------------
+t "hold-down state machine (guard_decide)"
+# ---------------------------------------------------------------------------
+M1140=$(build_mask 2430 2474)   # ch11/40
+M120=$(build_mask 2400 2424)    # ch1/20
+
+# fresh state
+last=""; last_sent=0; hold_start=0; hold_block=""; force=0
+assert_eq "send $M1140" "$(guard_decide 2430 2474 100)" "fresh guard + 2.4 GHz link: send"
+last="$M1140"; last_sent=100
+assert_eq "none" "$(guard_decide 2430 2474 105)" "stable link, nothing due: none"
+assert_eq "hold" "$(guard_decide "" "" 110)" "link lost: enter hold-down"
+hold_start=110; hold_block="$M1140"
+assert_eq "hold_wait" "$(guard_decide "" "" 115)" "within hold-down: keep waiting"
+assert_eq "resume" "$(guard_decide 2430 2474 130)" "same block returns inside the window: resume"
+hold_start=0
+assert_eq "hold" "$(guard_decide "" "" 135)" "link lost again: hold anew"
+hold_start=135; hold_block="$M1140"
+assert_eq "clear $ALL_USABLE" "$(guard_decide "" "" 200)" "hold expired: clear to all-usable"
+export last="$ALL_USABLE" last_sent=200 hold_start=0
+assert_eq "none" "$(guard_decide "" "" 210)" "already all-usable: none"
+assert_eq "refresh $ALL_USABLE" "$(guard_decide "" "" 265)" "all-usable state: periodic refresh due"
+assert_eq "send $M120" "$(guard_decide 2400 2424 270)" "link returns after clear: send the new block"
+
+# channel change DURING a hold-down: the new block takes precedence
+export last="$M1140" hold_start=110 hold_block="$M1140"
+assert_eq "send $M120" "$(guard_decide 2400 2424 130)" "channel changed during hold-down: send new block"
+
+# force (controller just came back) overrides "none"
+export last="$M1140" hold_start=0 force=1
+assert_eq "send $M1140" "$(guard_decide 2430 2474 105)" "force after controller return: send"
+
+# HOLD_S=0 disables the hold-down (v1.0 behaviour): hold then immediate clear
+export last="$M1140" hold_start=0
+HOLD_S=0
+assert_eq "hold" "$(guard_decide "" "" 300)" "HOLD_S=0: hold entered"
+export hold_start=300
+assert_eq "clear $ALL_USABLE" "$(guard_decide "" "" 300)" "HOLD_S=0: clear at the same instant"
+export HOLD_S=30
+
 # restore PATH polluted by the stub-backed tests
 PATH="$ORIG_PATH"
 

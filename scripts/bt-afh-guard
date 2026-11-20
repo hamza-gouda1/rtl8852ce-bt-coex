@@ -23,11 +23,12 @@
 GUARD_MHZ=2          # extra margin on each side of the Wi-Fi block
 INTERVAL=5           # seconds between checks
 REFRESH=60           # re-send even if unchanged (covers silent controller resets)
+HOLD_S=30            # keep the last mask this long after a Wi-Fi loss (flap protection; 0 disables)
 HCI=hci0
 # shellcheck disable=SC1091  # /etc/default/bt-afh-guard only exists on installed systems
 [ -r /etc/default/bt-afh-guard ] && . /etc/default/bt-afh-guard
 
-last=""; last_sent=0
+last=""; last_sent=0; hold_start=0; hold_block=""; was_up=0; force=0
 log() { logger -t bt-afh-guard "$*"; }
 
 # ---------------------------------------------------------------------------
@@ -265,6 +266,66 @@ log_live_maps() {   # $1 lo MHz, $2 hi MHz; logs report_live_maps output to the 
 }
 
 # ---------------------------------------------------------------------------
+# Hold-down state machine. When the 2.4 GHz link disappears the previously
+# sent mask stays on the controller for HOLD_S seconds before the all-usable
+# map is sent: Wi-Fi drops log "avoiding none-none" and re-mask on reconnect,
+# often several times per hour, and during each window the controller may hop
+# back into the Wi-Fi block while the radio is already struggling.
+# guard_decide is pure: it reads state globals (last, last_sent, hold_start,
+# hold_block, force) and prints one action word (plus the mask to send).
+# ---------------------------------------------------------------------------
+
+guard_decide() {   # $1 lo MHz or "", $2 hi MHz, $3 now (epoch seconds); prints "<action> [mask]":
+                   #   send <mask>   - program this mask now
+                   #   refresh <mask> - re-send the unchanged mask (covers silent controller resets)
+                   #   clear <mask>  - hold-down expired: send the all-usable map
+                   #   hold          - link lost: start holding the last mask, send nothing
+                   #   hold_wait     - hold-down running, send nothing
+                   #   resume        - link returned inside the hold-down window, send nothing
+                   #   none          - nothing to do
+    local lo=$1 hi=$2 now=$3 desired
+    desired=$(build_mask "$lo" "$hi")
+    if [ -z "$lo" ]; then
+        if [ -n "$last" ] && [ "$last" != "$ALL_USABLE" ] && [ "$hold_start" -eq 0 ]; then
+            echo "hold"
+            return 0
+        fi
+        if [ "$hold_start" -ne 0 ]; then
+            if (( now - hold_start >= HOLD_S )); then
+                echo "clear $ALL_USABLE"
+            else
+                echo "hold_wait"
+            fi
+            return 0
+        fi
+        # already all-usable (or nothing sent yet): only the periodic refresh applies
+        if (( now - last_sent >= REFRESH )); then
+            echo "refresh $ALL_USABLE"
+        else
+            echo "none"
+        fi
+        return 0
+    fi
+    # Wi-Fi link present:
+    if [ "$hold_start" -ne 0 ]; then
+        if [ "$desired" == "$hold_block" ]; then
+            echo "resume"
+        else
+            echo "send $desired"   # the block changed during the flap; the new block takes precedence
+        fi
+        return 0
+    fi
+    if [ "$desired" != "$last" ] || [ "$force" -eq 1 ]; then
+        echo "send $desired"
+    elif (( now - last_sent >= REFRESH )); then
+        echo "refresh $desired"
+    else
+        echo "none"
+    fi
+    return 0
+}
+
+# ---------------------------------------------------------------------------
 # Main program. Guarded so tests can source this file without starting the loop.
 # ---------------------------------------------------------------------------
 
@@ -315,32 +376,54 @@ if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
             fi
             was_up=1
             read -r lo hi <<<"$(wifi_block)"
-            mask=$(build_mask "$lo" "$hi")
             now=$(date +%s)
-            if [ "$mask" != "$last" ] || [ "$force" -eq 1 ]; then
-                if [ -n "$lo" ] && [ "$mask" = "$ALL_USABLE" ]; then
-                    log "WARNING: the Wi-Fi block would leave fewer than 20 usable channels; sending the all-usable map instead"
-                fi
-                if hci_send "$HCI" 0x03 0x003F $mask >/dev/null; then
-                    [ "$mask" != "$last" ] && log "avoiding ${lo:-none}-${hi:-none} MHz; mask: $mask"
-                    last="$mask"; last_sent=$now
-                    log_live_maps "$lo" "$hi"   # verify: read the live controller map back per link
-                else
-                    if [ -n "$HCI_STATUS" ]; then
-                        log "AFH set rejected: status $HCI_STATUS"
-                    else
-                        log "AFH set failed: no HCI verdict (transport failure)"
+            read -r action desired <<<"$(guard_decide "$lo" "$hi" "$now")"
+            case "$action" in
+                send)
+                    if [ -n "$lo" ] && [ "$desired" = "$ALL_USABLE" ]; then
+                        log "WARNING: the Wi-Fi block would leave fewer than 20 usable channels; sending the all-usable map instead"
                     fi
-                fi
-                force=0
-            elif (( now - last_sent >= REFRESH )); then
-                if hci_send "$HCI" 0x03 0x003F $mask >/dev/null; then
-                    last_sent=$now
-                    log_live_maps "$lo" "$hi"   # refresh re-send: also read back and log the live map
-                else
-                    log "AFH refresh failed: status ${HCI_STATUS:-no verdict}"
-                fi
-            fi
+                    if hci_send "$HCI" 0x03 0x003F $desired >/dev/null; then
+                        [ "$desired" != "$last" ] && log "avoiding ${lo:-none}-${hi:-none} MHz; mask: $desired"
+                        last="$desired"; last_sent=$now
+                        log_live_maps "$lo" "$hi"   # verify: read the live controller map back per link
+                        force=0
+                    else
+                        if [ -n "$HCI_STATUS" ]; then
+                            log "AFH set rejected: status $HCI_STATUS"
+                        else
+                            log "AFH set failed: no HCI verdict (transport failure)"
+                        fi
+                    fi
+                    hold_start=0
+                    ;;
+                refresh)
+                    if hci_send "$HCI" 0x03 0x003F $desired >/dev/null; then
+                        last_sent=$now
+                        log_live_maps "$lo" "$hi"   # refresh re-send: also read back and log the live map
+                    else
+                        log "AFH refresh failed: status ${HCI_STATUS:-no verdict}"
+                    fi
+                    ;;
+                clear)
+                    log "Wi-Fi link lost for >= $HOLD_S s; sending the all-usable map"
+                    if hci_send "$HCI" 0x03 0x003F $ALL_USABLE >/dev/null; then
+                        last="$ALL_USABLE"; last_sent=$now
+                        hold_start=0
+                    fi
+                    # on failure hold_start stays set, so the next cycle retries the clear
+                    ;;
+                hold)
+                    log "Wi-Fi link lost; holding the last mask for $HOLD_S s (flap protection)"
+                    hold_start=$now; hold_block="$last"
+                    ;;
+                hold_wait) ;;
+                resume)
+                    log "Wi-Fi link returned within the hold-down window; mask unchanged"
+                    hold_start=0
+                    ;;
+                none) ;;
+            esac
         else
             if [ "$was_up" -eq 1 ]; then
                 log "controller $HCI down; will re-send when it returns"
