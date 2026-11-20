@@ -338,6 +338,22 @@ EOF
 out=$(bash "$REPO/scripts/analyze-stalls.sh" "$TESTCAP/one.txt" 4)
 assert_eq "1" "$(echo "$out" | grep -c 'stalls > 50 ms: 0')" "zero-stall case"
 
+# ---------------------------------------------------------------------------
+t "analyze-stalls.sh: native hci-acl-capture format"
+# ---------------------------------------------------------------------------
+cat > "$TESTCAP/acl.txt" <<'EOF'
+# hci-acl-tx v1
+0.000000 5 625
+0.010000 5 625
+0.200000 5 625
+0.210000 5 625
+0.900000 20 100
+EOF
+out=$(bash "$REPO/scripts/analyze-stalls.sh" "$TESTCAP/acl.txt")
+assert_eq "1" "$(echo "$out" | grep -c 'handle 5:')" "native format: busiest handle auto-detects to 5"
+assert_eq "1" "$(echo "$out" | grep -c 'stalls > 50 ms: 1 ')" "native format: one stall detected"
+assert_eq "1" "$(echo "$out" | grep -c 'p95 190.0 ms')" "native format: p95 gap"
+
 # restore PATH polluted by the stub-backed tests
 PATH="$ORIG_PATH"
 

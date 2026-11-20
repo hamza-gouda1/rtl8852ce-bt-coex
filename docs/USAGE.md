@@ -16,6 +16,21 @@ Run order matters for some; each header explains itself.
 - **capture-10min.sh** — 600 s correlated capture: `btmon` HCI trace,
   traffic/signal every 2 s, `btc_info` coex state every 5 s. Music + real
   traffic during the window; the stall analysis needs actual stutter.
+  Run it **without sudo** (it calls sudo internally); its btmon step aborts
+  with a glibc fortify error while decoding the A2DP media stream on
+  bluez 5.72 (recording stops ~104 s in), so for HCI traces use
+  **hci-acl-capture.py** below.
+- **hci-acl-capture.py** — `sudo python3 scripts/hci-acl-capture.py <seconds>
+  [outfile]`: decoder-free ACL TX recorder on the kernel monitor channel,
+  the crash-proof replacement for btmon traces. Writes
+  `# hci-acl-tx v1` text (`<seconds> <handle> <dlen>` per line); the
+  outfile stays inside the current directory (relative paths only,
+  O_NOFOLLOW). Ctrl-C stops early with the data written so far.
+- **analyze-stalls.sh** — `bash scripts/analyze-stalls.sh <capture-dir|file>
+  [HANDLE]`: counts the delivery gaps > 50 ms of the audio link (busiest ACL
+  TX handle unless overridden) from either a capture-10min.sh directory or a
+  native hci-acl-capture.py file, and prints stalls, accumulated starvation,
+  p95 and worst gap — the metric next to the 488-stall baseline.
 - **btc-policy-test.sh** — five 50 s phases cycling coex policies via the
   `btc_policy_override` module parameter (baseline → TDW1B1 → PS-TDMA →
   BT-exclusive → restore). Requires patch 0002.

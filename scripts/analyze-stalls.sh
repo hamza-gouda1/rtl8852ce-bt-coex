@@ -34,27 +34,37 @@ fi
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 
-# Busiest ACL TX handle = the audio link (override by passing HANDLE).
-HANDLE=${2:-$(awk '
-    $0 ~ /[Aa][Cc][Ll] [Dd]ata TX/ {
-        for (i = 1; i <= NF; i++)
-            if ($i ~ /^handle:?$/) { cnt[$(i + 1)]++; break }
-    }
-    END { best = ""; for (k in cnt) if (cnt[k] > max) { max = cnt[k]; best = k }
-          print best }' "$TXT")}
-[ -n "$HANDLE" ] || { echo "[FAIL] no ACL Data TX traffic found in $TXT" >&2; exit 1; }
-
-# Timestamps (seconds of day) of every outgoing ACL packet on that handle.
-awk -v h="$HANDLE" '
-    $0 ~ /[Aa][Cc][Ll] [Dd]ata TX/ && $0 ~ ("handle " h "([^0-9]|$)") {
-        ts = ""
-        for (i = NF; i >= 1; i--)
-            if ($i ~ /^[0-9][0-9][:.][0-9][0-9][:.][0-9][0-9]\.[0-9][0-9][0-9][0-9][0-9][0-9]$/) { ts = $i; break }
-        if (ts != "") {
-            split(ts, t, /[:.]/)
-            printf "%.6f\n", t[1] * 3600 + t[2] * 60 + t[3] + t[4] / 1000000
+if head -1 "$TXT" 2>/dev/null | grep -q '^# hci-acl-tx v1'; then
+    # Native format of scripts/hci-acl-capture.py: "<seconds> <handle> <dlen>".
+    HANDLE=${2:-$(tail -n +2 "$TXT" | awk '
+        { c[$2]++ }
+        END { best = ""; for (k in c) if (c[k] > m) { m = c[k]; best = k }
+              print best }')}
+    [ -n "$HANDLE" ] || { echo "[FAIL] no ACL TX records in $TXT" >&2; exit 1; }
+    awk -v h="$HANDLE" '$2 == h { print $1 }' "$TXT" > "$TMP/sec.txt"
+else
+    # Busiest ACL TX handle = the audio link (override by passing HANDLE).
+    HANDLE=${2:-$(awk '
+        $0 ~ /[Aa][Cc][Ll] [Dd]ata TX/ {
+            for (i = 1; i <= NF; i++)
+                if ($i ~ /^handle:?$/) { cnt[$(i + 1)]++; break }
         }
-    }' "$TXT" > "$TMP/sec.txt"
+        END { best = ""; for (k in cnt) if (cnt[k] > max) { max = cnt[k]; best = k }
+              print best }' "$TXT")}
+    [ -n "$HANDLE" ] || { echo "[FAIL] no ACL Data TX traffic found in $TXT" >&2; exit 1; }
+
+    # Timestamps (seconds of day) of every outgoing ACL packet on that handle.
+    awk -v h="$HANDLE" '
+        $0 ~ /[Aa][Cc][Ll] [Dd]ata TX/ && $0 ~ ("handle " h "([^0-9]|$)") {
+            ts = ""
+            for (i = NF; i >= 1; i--)
+                if ($i ~ /^[0-9][0-9][:.][0-9][0-9][:.][0-9][0-9]\.[0-9][0-9][0-9][0-9][0-9][0-9]$/) { ts = $i; break }
+            if (ts != "") {
+                split(ts, t, /[:.]/)
+                printf "%.6f\n", t[1] * 3600 + t[2] * 60 + t[3] + t[4] / 1000000
+            }
+        }' "$TXT" > "$TMP/sec.txt"
+fi
 
 TXN=$(wc -l < "$TMP/sec.txt")
 [ "$TXN" -gt 1 ] || { echo "[FAIL] only $TXN ACL TX packet(s) for handle $HANDLE in $TXT" >&2; exit 1; }
