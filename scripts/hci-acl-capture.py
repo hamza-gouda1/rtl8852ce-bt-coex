@@ -115,7 +115,11 @@ def main():
         sock = open_monitor(dev_id)
     except OSError as exc:
         print(f"error: cannot open monitor channel on {args.hci}: {exc}", file=sys.stderr)
-        print("       (root required, and no other monitor reader such as btmon may be running)", file=sys.stderr)
+        if exc.errno == 16:   # EBUSY
+            print("       the channel is held by another monitor reader - check: ps aux | grep btmon", file=sys.stderr)
+            print("       and stop it (sudo pkill -x btmon) before recording", file=sys.stderr)
+        else:
+            print("       (root required, and no other monitor reader such as btmon may be running)", file=sys.stderr)
         return 1
 
     n = 0
