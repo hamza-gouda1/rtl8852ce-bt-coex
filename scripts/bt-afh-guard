@@ -104,6 +104,102 @@ mask_usable_count() {   # $1 = mask string ("0xXX ..." 10 bytes, LSB first) -> n
 ALL_USABLE="0xFF 0xFF 0xFF 0xFF 0xFF 0xFF 0xFF 0xFF 0xFF 0x7F"
 
 # ---------------------------------------------------------------------------
+# Verified HCI sender. `hcitool cmd` exits 0 even when the controller rejects
+# the command; the verdict is in the Command Complete event's status byte.
+# scripts/hci-cmd.py (preferred) waits for that event natively and exits with
+# the status byte; the hcitool fallback parses the status from hcitool's own
+# event dump. Both set HCI_STATUS ("0xNN" on an HCI-level verdict, "" when no
+# verdict was received) and return 0 only for status 0x00.
+# ---------------------------------------------------------------------------
+
+HCI_CMD_PY=""
+HCI_BACKEND=""
+hci_backend() {   # pick the verified-sender backend once; returns 0 when one exists
+    local dir here
+    here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+    for dir in "$here" /usr/local/lib/bt-afh-guard /usr/local/share/bt-afh-guard; do
+        if [ -x "$dir/hci-cmd.py" ]; then
+            HCI_CMD_PY="$dir/hci-cmd.py"
+            HCI_BACKEND="hci-cmd.py ($dir/hci-cmd.py)"
+            return 0
+        fi
+    done
+    if command -v hcitool >/dev/null 2>&1; then
+        HCI_BACKEND="hcitool (status parsed from the Command Complete dump)"
+        return 0
+    fi
+    return 1
+}
+
+hcitool_cc_status() {   # $1 = full hcitool cmd output; $2 = opcode lo byte, $3 = opcode hi byte (hex, no 0x prefix); prints "0xNN [params as 0xNN ...]" or "NO-CC"/"OPCODE-MISMATCH"
+    awk -v lo="$2" -v hi="$3" '
+        / HCI Event: Command Complete/ {inc = 1; next}
+        inc && /^[<>]/ {exit}
+        inc {
+            for (i = 1; i <= NF; i++)
+                if ($i ~ /^[0-9A-Fa-f][0-9A-Fa-f]$/) { k++; b[k] = toupper($i) }
+        }
+        END {
+            if (k >= 4) {
+                if (b[2] == toupper(lo) && b[3] == toupper(hi)) {
+                    s = "0x" b[4]
+                    for (i = 5; i <= k; i++) s = s " 0x" b[i]
+                    print s
+                } else {
+                    print "OPCODE-MISMATCH"
+                }
+            } else {
+                print "NO-CC"
+            }
+        }' <<<"$1"
+}
+
+hci_send() {   # HCI OGF OCF [PARAMS...] -> prints return params on stdout; sets HCI_STATUS ("0xNN" or "" when no verdict); returns 0 iff the controller accepted (status 0x00)
+    HCI_STATUS=""
+    local dev=$1 ogf=$2 ocf=$3
+    shift 3
+    local out rc first parsed
+    if [ -n "$HCI_CMD_PY" ]; then
+        out=$("$HCI_CMD_PY" --hci "$dev" "$ogf" "$ocf" "$@" 2>/dev/null)
+        rc=$?
+        first=${out%%$'\n'*}
+        if [[ "$first" == status\ 0x* ]]; then
+            HCI_STATUS=${first#status }
+        fi
+        parsed=${out#*$'\n'}
+        [ "$parsed" = "$out" ] && parsed=""
+        printf '%s\n' "$parsed"
+        [ "$rc" -eq 0 ] && return 0
+        return 1
+    fi
+    # hcitool fallback: `hcitool cmd` exits 0 even for rejected commands, so the
+    # status byte and return parameters are parsed from the event dump.
+    out=$(hcitool -i "$dev" cmd "$ogf" "$ocf" "$@" 2>&1) || { echo "hcitool transport failure" >&2; return 1; }
+    local op lo hi st
+    op=$(( (ogf << 10) | ocf ))
+    lo=$(printf '%02X' $(( op & 0xFF )))
+    hi=$(printf '%02X' $(( (op >> 8) & 0xFF )))
+    st=$(hcitool_cc_status "$out" "$lo" "$hi")
+    if [ "$st" = "NO-CC" ] || [ "$st" = "OPCODE-MISMATCH" ]; then
+        echo "no Command Complete verdict for opcode 0x$hi$lo" >&2
+        return 1
+    fi
+    HCI_STATUS=${st%% *}
+    if [ "${st%% *}" != "0x00" ]; then
+        echo "HCI status ${st%% *}" >&2
+        return 1
+    fi
+    parsed=${st#* }
+    [ "$parsed" = "$st" ] && parsed=""   # no space: the Command Complete had no return parameters
+    printf '%s\n' "$parsed"
+    return 0
+}
+
+controller_alive() {   # returns 0 when $HCI answers Read_Local_Version_Info (read-only) via the verified sender
+    hci_send "$HCI" 0x04 0x0001 >/dev/null 2>&1
+}
+
+# ---------------------------------------------------------------------------
 # Main program. Guarded so tests can source this file without starting the loop.
 # ---------------------------------------------------------------------------
 
@@ -123,30 +219,51 @@ if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
         exit 0
     fi
 
+    hci_backend || true
+    if [ -z "$HCI_BACKEND" ]; then
+        log "no verified HCI backend (scripts/hci-cmd.py or bluez hcitool needed); idling"
+        while :; do sleep "$INTERVAL"; done
+    fi
+    log "verified HCI sender backend: $HCI_BACKEND"
+
+    was_up=0; force=0
     while true; do
-        if hciconfig "$HCI" 2>/dev/null | grep -q 'UP RUNNING'; then
+        if controller_alive; then
+            if [ "$was_up" -eq 0 ]; then
+                log "controller $HCI is up"
+                force=1   # re-send after any controller outage (reset, restart, resume)
+            fi
+            was_up=1
             read -r lo hi <<<"$(wifi_block)"
             mask=$(build_mask "$lo" "$hi")
             now=$(date +%s)
-            if [ "$mask" != "$last" ]; then
+            if [ "$mask" != "$last" ] || [ "$force" -eq 1 ]; then
                 if [ -n "$lo" ] && [ "$mask" = "$ALL_USABLE" ]; then
                     log "WARNING: the Wi-Fi block would leave fewer than 20 usable channels; sending the all-usable map instead"
                 fi
-                if hcitool -i "$HCI" cmd 0x03 0x003F $mask >/dev/null 2>&1; then
-                    log "avoiding ${lo:-none}-${hi:-none} MHz; mask:$mask"
+                if hci_send "$HCI" 0x03 0x003F $mask >/dev/null; then
+                    [ "$mask" != "$last" ] && log "avoiding ${lo:-none}-${hi:-none} MHz; mask: $mask"
                     last="$mask"; last_sent=$now
                 else
-                    log "failed to send AFH map"
+                    if [ -n "$HCI_STATUS" ]; then
+                        log "AFH set rejected: status $HCI_STATUS"
+                    else
+                        log "AFH set failed: no HCI verdict (transport failure)"
+                    fi
                 fi
+                force=0
             elif (( now - last_sent >= REFRESH )); then
-                if hcitool -i "$HCI" cmd 0x03 0x003F $mask >/dev/null 2>&1; then
+                if hci_send "$HCI" 0x03 0x003F $mask >/dev/null; then
                     last_sent=$now
                 else
-                    log "failed to send AFH map"
+                    log "AFH refresh failed: status ${HCI_STATUS:-no verdict}"
                 fi
             fi
         else
-            last=""   # controller down: resend as soon as it comes back
+            if [ "$was_up" -eq 1 ]; then
+                log "controller $HCI down; will re-send when it returns"
+            fi
+            was_up=0
         fi
         sleep "$INTERVAL"
     done

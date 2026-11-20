@@ -31,3 +31,6 @@ build-aac/
 
 # afh-test2.sh capture dirs
 scripts/afh-test2-*/
+
+# Python bytecode (scripts/hci-cmd.py compilation check)
+__pycache__/

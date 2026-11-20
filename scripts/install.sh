@@ -3,18 +3,50 @@
 # Install the permanent RTL8852CE Bluetooth/Wi-Fi coexistence fix.
 # Part of rtl8852ce-bt-coex by Hamza Gouda (GPL-2.0)
 #
-#   1. bt-afh-guard daemon + systemd service (always)
+#   1. bt-afh-guard daemon + verified HCI sender + systemd service (always)
 #   2. PipeWire AAC codec plugin (if built first with scripts/build-aac-plugin.sh)
 #
 # Safe to run while Wi-Fi is in use: it never touches the network stack.
-# Usage: sudo bash scripts/install.sh
+# Usage: sudo bash scripts/install.sh   (override the controller with HCI=hci1 ...)
 set -euo pipefail
 [ "$EUID" -eq 0 ] || { echo "Run with sudo"; exit 1; }
 REPO=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-for p in hcitool hciconfig iw; do command -v $p >/dev/null || { echo "[FAIL] missing '$p' (apt install bluez iw)"; exit 1; }; done
 
-# 1) AFH guard
+for p in iw python3; do
+    command -v "$p" >/dev/null 2>&1 || { echo "[FAIL] missing '$p' (apt install iw python3)"; exit 1; }
+done
+if ! command -v hcitool >/dev/null 2>&1 && [ ! -x "$REPO/scripts/hci-cmd.py" ]; then
+    echo "[FAIL] need bluez hcitool or scripts/hci-cmd.py as the verified HCI sender backend"
+    exit 1
+fi
+HCI=${HCI:-hci0}
+
+# Source the daemon for the verified sender (hci_backend / hci_send) so the
+# logic exists exactly once, in scripts/bt-afh-guard.
+# shellcheck disable=SC1091
+source "$REPO/scripts/bt-afh-guard"
+
+if [ ! -d "/sys/class/bluetooth/$HCI" ]; then
+    echo "[FAIL] controller $HCI not present in /sys/class/bluetooth/"
+    exit 1
+fi
+hci_backend || true
+if [ -z "$HCI_BACKEND" ]; then
+    echo "[FAIL] no verified HCI backend available"
+    exit 1
+fi
+echo "[i] verified HCI sender backend: $HCI_BACKEND"
+
+if hci_send "$HCI" 0x04 0x0001 >/dev/null; then
+    echo "[ok] controller $HCI answers HCI commands"
+else
+    echo "[FAIL] controller $HCI does not answer HCI commands (down, or rfkill blocked?)"
+    exit 1
+fi
+
+# 1) AFH guard + verified sender
 install -m 0755 "$REPO/scripts/bt-afh-guard" /usr/local/sbin/bt-afh-guard
+install -m 0755 -D "$REPO/scripts/hci-cmd.py" /usr/local/lib/bt-afh-guard/hci-cmd.py
 install -m 0644 "$REPO/systemd/bt-afh-guard.service" /etc/systemd/system/bt-afh-guard.service
 systemctl daemon-reload
 systemctl enable --now bt-afh-guard.service
@@ -41,10 +73,24 @@ else
     echo "[i] AAC plugin not built -- skipped (optional: bash scripts/build-aac-plugin.sh)"
 fi
 
-# 3) Show the hop map the connected headphones actually use (HCI Read AFH Channel Map)
-H=$(hcitool con 2>/dev/null | grep -oP 'handle \K[0-9]+' | head -1 || true)
+# 3) Show the hop map the connected device actually uses (HCI Read AFH Channel Map)
+H=""
+if command -v hcitool >/dev/null 2>&1; then
+    H=$(hcitool con 2>/dev/null | grep -oP 'handle \K[0-9]+' | head -1 || true)
+elif [ -n "$HCI_CMD_PY" ]; then
+    for line in $("$HCI_CMD_PY" --list-conns --hci "$HCI"); do
+        if [[ "$line" == handle\ * ]]; then
+            H=${line#handle }; H=${H%% *}
+            break
+        fi
+    done
+fi
 if [ -n "$H" ]; then
-    echo "[i] Live link AFH map (byte 7 onward = channel bitmap, 1 = in use):"
-    hcitool cmd 0x05 0x0006 "$(printf '0x%02X' "$H")" 0x00 | tail -1
+    echo "[i] Live link AFH map for handle $H (bit n = 1: channel n in use):"
+    if out=$(hci_send "$HCI" 0x05 0x0006 "$(printf '0x%02X 0x%02X' $(( H & 0xFF )) $(( (H >> 8) & 0xFF )))"); then
+        echo "     $out"
+    else
+        echo "[i] live-map read failed: status ${HCI_STATUS:-no verdict}"
+    fi
 fi
 echo "DONE"
