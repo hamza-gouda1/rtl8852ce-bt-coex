@@ -313,6 +313,31 @@ assert_eq "bt-afh-guard $GUARD_VERSION" "$(bash "$REPO/scripts/bt-afh-guard" --v
 help_count=$(bash "$REPO/scripts/bt-afh-guard" --help 2>&1 | grep -c 'Usage:')
 assert_eq "1" "$help_count" "--help prints usage"
 
+# ---------------------------------------------------------------------------
+t "analyze-stalls.sh: canned decoded-btmon trace"
+# ---------------------------------------------------------------------------
+TESTCAP=$(mktemp -d)
+trap 'rm -rf "$STUBBIN" "$TESTCAP"' EXIT
+cat > "$TESTCAP/hci.txt" <<'EOF'
+@ ACL Data TX: handle 4 plen 27                         [hci0] 10.00.00.000000
+@ ACL Data TX: handle 4 plen 27                         [hci0] 10.00.00.010000
+@ ACL Data TX: handle 4 plen 27                         [hci0] 10.00.00.200000
+@ ACL Data TX: handle 4 plen 27                         [hci0] 10.00.00.210000
+@ ACL Data TX: handle 20 plen 27                        [hci0] 10.00.00.900000
+EOF
+out=$(bash "$REPO/scripts/analyze-stalls.sh" "$TESTCAP")
+assert_eq "1" "$(echo "$out" | grep -c 'handle 4:')" "busiest handle auto-detects to 4 (not 20)"
+assert_eq "1" "$(echo "$out" | grep -c 'stalls > 50 ms: 1 ')" "one stall detected (the 190 ms gap)"
+assert_eq "1" "$(echo "$out" | grep -c 'p95 190.0 ms')" "p95 gap"
+assert_eq "1" "$(echo "$out" | grep -c 'worst 190.0 ms')" "worst gap"
+
+cat > "$TESTCAP/one.txt" <<'EOF'
+@ ACL Data TX: handle 4 plen 27   [hci0] 10.00.00.000000
+@ ACL Data TX: handle 4 plen 27   [hci0] 10.00.00.010000
+EOF
+out=$(bash "$REPO/scripts/analyze-stalls.sh" "$TESTCAP/one.txt" 4)
+assert_eq "1" "$(echo "$out" | grep -c 'stalls > 50 ms: 0')" "zero-stall case"
+
 # restore PATH polluted by the stub-backed tests
 PATH="$ORIG_PATH"
 
