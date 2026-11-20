@@ -20,7 +20,7 @@
 # the mask when Wi-Fi leaves 2.4 GHz.
 # Optional overrides: /etc/default/bt-afh-guard (GUARD_MHZ, INTERVAL, REFRESH, HCI)
 
-GUARD_VERSION="1.1.0"
+GUARD_VERSION="1.1.1"
 GUARD_MHZ=2          # extra margin on each side of the Wi-Fi block
 INTERVAL=5           # seconds between checks
 REFRESH=60           # re-send even if unchanged (covers silent controller resets)

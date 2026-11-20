@@ -7,7 +7,7 @@ authors:
   - family-names: Gouda
     given-names: Hamza
     email: hraafat357@gmail.com
-version: 1.1.0
+version: 1.1.1
 date-released: "2026-11-20"
 license: GPL-2.0-only
 repository-code: "https://github.com/hamza-gouda1/rtl8852ce-bt-coex"

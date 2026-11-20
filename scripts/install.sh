@@ -61,10 +61,19 @@ install -m 0755 "$REPO/scripts/bt-afh-guard" /usr/local/sbin/bt-afh-guard
 install -m 0755 -D "$REPO/scripts/hci-cmd.py" /usr/local/lib/bt-afh-guard/hci-cmd.py
 install -m 0644 "$REPO/systemd/bt-afh-guard.service" /etc/systemd/system/bt-afh-guard.service
 systemctl daemon-reload
-systemctl enable --now bt-afh-guard.service
+systemctl enable bt-afh-guard.service
+# restart, not "enable --now": an already-running older daemon keeps executing
+# its old in-memory copy and the old unit's sandboxing until it is restarted.
+STARTED=$(date '+%Y-%m-%d %H:%M:%S')
+systemctl restart bt-afh-guard.service
 sleep 6
-echo "[ok] bt-afh-guard: $(systemctl is-active bt-afh-guard)"
-journalctl -t bt-afh-guard -n 1 -o cat --no-pager || true
+echo "[ok] bt-afh-guard: $(systemctl is-active bt-afh-guard) (pid $(systemctl show -p MainPID --value bt-afh-guard))"
+NEW_LOG=$(journalctl -t bt-afh-guard --since "$STARTED" -o cat --no-pager 2>/dev/null || true)
+if [ -n "$NEW_LOG" ]; then
+    sed 's/^/     /' <<<"$NEW_LOG"
+else
+    echo "[!] the restarted daemon has not logged yet -- check: journalctl -t bt-afh-guard -f"
+fi
 
 # 2) AAC plugin (optional)
 SO="$REPO/build-aac/libspa-codec-bluez5-aac.so"

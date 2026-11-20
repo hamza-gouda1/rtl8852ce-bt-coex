@@ -5,6 +5,22 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-11-20
+
+### Fixed
+- `install.sh` used `systemctl enable --now`, which leaves an already-running
+  daemon untouched. Upgrades therefore kept running the old in-memory copy
+  under the old, unhardened unit. The installer now restarts the service and
+  prints only the log lines written by the restarted daemon. Before, it
+  printed the last journal line, which could be left over from the old
+  process.
+
+### Verified
+- On the reference laptop, the restarted 1.1.1 daemon ran under the hardened
+  unit with only `CAP_NET_ADMIN` and `CAP_NET_RAW`, and `NoNewPrivileges` set.
+  It programmed the channel-1 / 20 MHz mask through `hci-cmd.py`, and the
+  controller accepted it with status 0x00.
+
 ## [1.1.0] - 2026-11-20
 
 ### Added
