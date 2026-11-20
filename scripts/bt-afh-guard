@@ -163,24 +163,28 @@ hci_backend() {   # pick the verified-sender backend once; returns 0 when one ex
 }
 
 hcitool_cc_status() {   # $1 = full hcitool cmd output; $2 = opcode lo byte, $3 = opcode hi byte (hex, no 0x prefix); prints "0xNN [params as 0xNN ...]" or "NO-CC"/"OPCODE-MISMATCH"
+    # hcitool prints the first event after the command as
+    #   > HCI Event: 0x0e plen 4      followed by hex-dump lines
+    # Command Complete (0x0e): ncmd | opcode lo hi | status | params...
+    # Command Status   (0x0f): status | ncmd | opcode lo hi
     awk -v lo="$2" -v hi="$3" '
-        / HCI Event: Command Complete/ {inc = 1; next}
+        /^> HCI Event: 0x0[eEfF] / {inc = 1; evt = tolower($4); next}
         inc && /^[<>]/ {exit}
         inc {
             for (i = 1; i <= NF; i++)
                 if ($i ~ /^[0-9A-Fa-f][0-9A-Fa-f]$/) { k++; b[k] = toupper($i) }
         }
         END {
-            if (k >= 4) {
-                if (b[2] == toupper(lo) && b[3] == toupper(hi)) {
-                    s = "0x" b[4]
-                    for (i = 5; i <= k; i++) s = s " 0x" b[i]
-                    print s
-                } else {
-                    print "OPCODE-MISMATCH"
-                }
+            if (k < 4) { print "NO-CC"; exit }
+            if (evt == "0x0e") {
+                if (b[2] != toupper(lo) || b[3] != toupper(hi)) { print "OPCODE-MISMATCH"; exit }
+                s = "0x" b[4]
+                for (i = 5; i <= k; i++) s = s " 0x" b[i]
+                print s
             } else {
-                print "NO-CC"
+                if (b[3] != toupper(lo) || b[4] != toupper(hi)) { print "OPCODE-MISMATCH"; exit }
+                if (b[1] == "00") { print "NO-CC"; exit }   # pending, not a verdict
+                print "0x" b[1]
             }
         }' <<<"$1"
 }
@@ -251,12 +255,13 @@ list_acl_handles() {   # prints connected ACL handles, one per line; empty when 
 }
 
 read_live_map() {   # $1 = ACL handle; prints the live AFH map as 10 hex bytes, or returns 1 on failure
+    # Return parameters after the status byte: handle (2) | AFH_Mode (1) | AFH_Channel_Map (10)
     local out i m=""
     out=$(hci_send "$HCI" 0x05 0x0006 "$(printf '0x%02X' $(( $1 & 0xFF )))" "$(printf '0x%02X' $(( ($1 >> 8) & 0xFF )))" 2>/dev/null) || return 1
     local -a p
     read -r -a p <<<"$out"
-    [ "${#p[@]}" -ge 12 ] || return 1
-    for ((i = 2; i < 12; i++)); do
+    [ "${#p[@]}" -ge 13 ] || return 1
+    for ((i = 3; i < 13; i++)); do
         m+=" ${p[i]}"
     done
     echo "${m# }"

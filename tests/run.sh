@@ -118,17 +118,31 @@ assert_eq "79" "$(mask_usable_count "$ALL_USABLE")" "usable all-usable"
 # ---------------------------------------------------------------------------
 t "verified sender: hcitool_cc_status parses real hcitool dumps"
 # ---------------------------------------------------------------------------
-CC_OK='> HCI Event: Command Complete (0x0e) plen 6
-      01 3F 0C 00'
-CC_REJ='> HCI Event: Command Complete (0x0e) plen 6
-      01 3F 0C 12'
-CC_READAFH='> HCI Event: Command Complete (0x0e) plen 17
-      01 06 14 00 04 00 FF FF FF 00 00 00 00 00 00 60'
+# Real hcitool output, recorded on the reference laptop (tests/fixtures/hci/),
+# plus rejected and Command Status cases in the same format.
+HCIFIX="$FIXTURES/hci"
+CC_OK='< HCI Command: ogf 0x03, ocf 0x003f, plen 10
+  FF FF FF FF FF FF FF FF FF 7F
+> HCI Event: 0x0e plen 4
+  01 3F 0C 00 '
+CC_REJ='< HCI Command: ogf 0x03, ocf 0x003f, plen 10
+  FF FF FF FF FF FF FF FF FF FF
+> HCI Event: 0x0e plen 4
+  01 3F 0C 12 '
+CS_REJ='< HCI Command: ogf 0x03, ocf 0x003f, plen 10
+  FF FF FF FF FF FF FF FF FF 7F
+> HCI Event: 0x0f plen 4
+  0C 01 3F 0C '
+CC_READAFH=$(cat "$HCIFIX/hcitool-read-afh-map.txt")
+CC_VERSION=$(cat "$HCIFIX/hcitool-read-local-version.txt")
 assert_eq "0x00" "$(hcitool_cc_status "$CC_OK" 3F 0C)" "cc status ok (Set AFH opcode 0x0C3F)"
 assert_eq "0x12" "$(hcitool_cc_status "$CC_REJ" 3F 0C)" "cc status rejected 0x12"
-assert_eq "0x00 0x04 0x00 0xFF 0xFF 0xFF 0x00 0x00 0x00 0x00 0x00 0x00 0x60" \
-    "$(hcitool_cc_status "$CC_READAFH" 06 14)" "cc status + return params (Read AFH, handle 4)"
-assert_eq "NO-CC" "$(hcitool_cc_status "< HCI Command: Set AFH Host Channel Classification (0x03|0x003f) plen 10" 3F 0C)" "no Command Complete -> NO-CC"
+assert_eq "0x0C" "$(hcitool_cc_status "$CS_REJ" 3F 0C)" "Command Status rejection 0x0C (Command Disallowed)"
+assert_eq "0x00 0x04 0x00 0x01 0x00 0x00 0x00 0xF8 0xFF 0xFF 0xFF 0xFF 0xFF 0x7F" \
+    "$(hcitool_cc_status "$CC_READAFH" 06 14)" "recorded Read AFH Channel Map: status + handle + mode + map"
+assert_eq "0x00 0x0C 0x0D 0x04 0x0C 0x5D 0x00 0x25 0x72" \
+    "$(hcitool_cc_status "$CC_VERSION" 01 10)" "recorded Read Local Version Information"
+assert_eq "NO-CC" "$(hcitool_cc_status "< HCI Command: ogf 0x03, ocf 0x003f, plen 10" 3F 0C)" "no event -> NO-CC"
 assert_eq "OPCODE-MISMATCH" "$(hcitool_cc_status "$CC_OK" 06 14)" "opcode mismatch detection"
 
 # ---------------------------------------------------------------------------
@@ -156,11 +170,11 @@ assert_eq "" "$(cat "$TMP_OUT")" "python backend: no return params for Set AFH"
 assert_eq "0" "$rc" "python backend: returns 0 on accepted command"
 
 HCI_STATUS=""
-export HCISTUB_STATUS=0x00 HCISTUB_RC=0 HCISTUB_PARAMS="0x04 0x00 0xFF 0xFF 0xFF 0x00 0x00 0x00 0x00 0x00 0x00 0x60"
+export HCISTUB_STATUS=0x00 HCISTUB_RC=0 HCISTUB_PARAMS="0x04 0x00 0x01 0xFF 0xFF 0xFF 0x00 0x00 0x00 0x00 0x00 0x00 0x60"
 hci_send hci0 0x05 0x0006 0x04 0x00 >"$TMP_OUT"
 rc=$?
 assert_eq "0x00" "$HCI_STATUS" "python backend: read-afh status"
-assert_eq "0x04 0x00 0xFF 0xFF 0xFF 0x00 0x00 0x00 0x00 0x00 0x00 0x60" "$(cat "$TMP_OUT")" "python backend: return params forwarded"
+assert_eq "0x04 0x00 0x01 0xFF 0xFF 0xFF 0x00 0x00 0x00 0x00 0x00 0x00 0x60" "$(cat "$TMP_OUT")" "python backend: return params forwarded"
 
 HCI_STATUS=""
 export HCISTUB_STATUS=0x12 HCISTUB_RC=18
@@ -172,24 +186,24 @@ assert_eq "1" "$rc" "python backend: rejected -> rc 1"
 # ---------------------------------------------------------------------------
 t "verified sender: hci_send via stubbed hcitool fallback"
 # ---------------------------------------------------------------------------
-cat > "$STUBBIN/hcitool" <<'EOF'
+cat > "$STUBBIN/hcitool" <<'STUB'
 #!/bin/bash
-# Test stub for hcitool: replays canned Command Complete dumps.
+# Test stub for hcitool: replays recorded output (and same-format reject cases).
 if [ "${1:-}" = "con" ]; then
-    printf 'Connections:\n\t> ACL 98:47:44:A0:D1:65 handle 4 state 1 lm CENTRAL AUTH ENCRYPT\n'
+    cat "$HCIFIX/hcitool-con.txt"
     exit 0
 fi
 case "${HCITOOL_STUB_CASE:-ok}" in
-    ok)      printf '< HCI Command: Set AFH Host Channel Classification (0x03|0x003f) plen 10\n> HCI Event: Command Complete (0x0e) plen 6\n      01 3F 0C 00\n' ;;
-    reject)  printf '< HCI Command: Set AFH Host Channel Classification (0x03|0x003f) plen 10\n> HCI Event: Command Complete (0x0e) plen 6\n      01 3F 0C 12\n' ;;
-    nocc)    printf '< HCI Command: Set AFH Host Channel Classification (0x03|0x003f) plen 10\n' ;;
-    readafh) printf '< HCI Command: Read AFH Channel Map (0x05|0x0006) plen 2\n> HCI Event: Command Complete (0x0e) plen 17\n      01 06 14 00 04 00 FF FF FF 00 00 00 00 00 00 60\n' ;;
+    ok)      printf '%s\n' "$CC_OK" ;;
+    reject)  printf '%s\n' "$CC_REJ" ;;
+    nocc)    printf '< HCI Command: ogf 0x03, ocf 0x003f, plen 10\n' ;;
+    readafh) cat "$HCIFIX/hcitool-read-afh-map.txt" ;;
 esac
-EOF
+STUB
 chmod +x "$STUBBIN/hcitool"
 
 TMP_OUT="$STUBBIN/out2.txt"
-export HCI_CMD_PY=""
+export HCI_CMD_PY="" HCIFIX CC_OK CC_REJ
 
 HCI_STATUS=""
 HCITOOL_STUB_CASE=ok hci_send hci0 0x03 0x003F $ALL_USABLE >"$TMP_OUT"
@@ -208,7 +222,7 @@ HCI_STATUS=""
 HCITOOL_STUB_CASE=readafh hci_send hci0 0x05 0x0006 0x04 0x00 >"$TMP_OUT"
 rc=$?
 assert_eq "0x00" "$HCI_STATUS" "hcitool fallback: read-afh status"
-assert_eq "0x04 0x00 0xFF 0xFF 0xFF 0x00 0x00 0x00 0x00 0x00 0x00 0x60" "$(cat "$TMP_OUT")" "hcitool fallback: return params parsed"
+assert_eq "0x04 0x00 0x01 0x00 0x00 0x00 0xF8 0xFF 0xFF 0xFF 0xFF 0xFF 0x7F" "$(cat "$TMP_OUT")" "hcitool fallback: recorded return params parsed"
 
 HCI_STATUS=""
 HCITOOL_STUB_CASE=nocc hci_send hci0 0x03 0x003F $ALL_USABLE >"$TMP_OUT"
@@ -222,10 +236,15 @@ t "live-map readback: handle enumeration, map extraction, overlap count"
 export PATH="$STUBBIN:$PATH"   # stub hcitool: `hcitool con` -> one ACL handle 4
 assert_eq "4" "$(list_acl_handles)" "list_acl_handles: hcitool con -> ACL handle 4"
 
-export HCISTUB_STATUS=0x00 HCISTUB_RC=0 HCISTUB_PARAMS="0x04 0x00 0xFF 0xFF 0xFF 0x00 0x00 0x00 0x00 0x00 0x00 0x60"
+export HCISTUB_STATUS=0x00 HCISTUB_RC=0 HCISTUB_PARAMS="0x04 0x00 0x01 0xFF 0xFF 0xFF 0x00 0x00 0x00 0x00 0x00 0x00 0x60"
 export HCI_CMD_PY="$STUBBIN/hci-cmd.py"
 m=$(read_live_map 4)
-assert_eq "0xFF 0xFF 0xFF 0x00 0x00 0x00 0x00 0x00 0x00 0x60" "$m" "read_live_map: skips the 2-byte handle prefix"
+assert_eq "0xFF 0xFF 0xFF 0x00 0x00 0x00 0x00 0x00 0x00 0x60" "$m" "read_live_map: skips handle (2) + AFH_Mode (1)"
+HCI_CMD_PY=""
+m=$(HCITOOL_STUB_CASE=readafh read_live_map 4)
+assert_eq "0x00 0x00 0x00 0xF8 0xFF 0xFF 0xFF 0xFF 0xFF 0x7F" "$m" "read_live_map: recorded hcitool dump"
+assert_eq "0" "$(overlap_count "$m" 2400 2424)" "recorded live map vs the recorded ch1/20 block: 0 overlap"
+export HCI_CMD_PY="$STUBBIN/hci-cmd.py"
 
 # the measured v1.0 live map (channels 0-23 and 77-78) vs the ch11/40 block
 LIVE="0xFF 0xFF 0xFF 0x00 0x00 0x00 0x00 0x00 0x00 0x60"
@@ -315,6 +334,20 @@ for m in "$(build_mask 2400 2424)" "$(build_mask 2400 2444)" "$(build_mask 2425 
         p
     fi
 done
+
+# ---------------------------------------------------------------------------
+t "hci-cmd.py: packet parser and kernel struct layouts (python unittest)"
+# ---------------------------------------------------------------------------
+if command -v python3 >/dev/null 2>&1; then
+    if py_out=$(python3 -m unittest discover -s "$HERE" -p 'test_*.py' 2>&1); then
+        p
+    else
+        f "python unittest suite"
+    fi
+    tail -3 <<<"$py_out"
+else
+    echo "(python3 not found -- skipped)"
+fi
 
 echo
 echo "passed: $PASS, failed: $FAIL"

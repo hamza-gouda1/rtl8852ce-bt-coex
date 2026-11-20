@@ -36,12 +36,24 @@ HCI_EVENT_PKT = 0x04
 EVT_CMD_COMPLETE = 0x0E
 EVT_CMD_STATUS = 0x0F
 
-# struct hci_conn_list_req { __u16 conn_num; __u16 dev_id;
+# A raw HCI socket delivers nothing until a filter is installed (the kernel
+# starts every socket with an all-zero type mask). struct hci_ufilter is
+# { __u32 type_mask; __u32 event_mask[2]; __u16 opcode; } and sizeof() is 16
+# because of tail padding; a 14-byte option is rejected with EINVAL.
+SOL_HCI = getattr(socket, "SOL_HCI", 0)
+HCI_FILTER = getattr(socket, "HCI_FILTER", 2)
+CMD_EVENT_FILTER = struct.pack(
+    "<IIIH2x", 1 << HCI_EVENT_PKT, (1 << EVT_CMD_COMPLETE) | (1 << EVT_CMD_STATUS), 0, 0)
+
+# include/net/bluetooth/hci_sock.h:
+# struct hci_conn_list_req { __u16 dev_id; __u16 conn_num;
 #                            struct hci_conn_info conn_info[]; }
-# struct hci_conn_info { __u16 handle; __u8 bdaddr[6]; __u8 type;
-#                        __u8 out; __u8 state; __u16 link_mode; }  # 14 bytes
-HCIGETCONNLIST = 0x800448DD  # _IOR('H', 221, int)
-HCI_CONN_INFO_SIZE = 14
+# struct hci_conn_info { __u16 handle; bdaddr_t bdaddr; __u8 type; __u8 out;
+#                        __u16 state; __u32 link_mode; }       # 16 bytes
+HCIGETCONNLIST = 0x800448D4  # _IOR('H', 212, int)
+HCI_CONN_INFO_FMT = "<H6sBBHI"
+HCI_CONN_INFO_SIZE = struct.calcsize(HCI_CONN_INFO_FMT)
+ACL_LINK = 1
 
 HCI_STATUS_NAMES = {
     0x01: "Unknown Command",
@@ -70,37 +82,42 @@ def send_command(sock, opcode, params):
     sock.send(bytes([HCI_COMMAND_PKT]) + struct.pack("<H", opcode) + bytes([len(params)]) + bytes(params))
 
 
-def wait_complete(sock, opcode, deadline):
-    """Read events until the Command Complete for `opcode`; returns (status, params).
+def parse_event(pkt, opcode):
+    """Classify one raw HCI packet against `opcode`.
 
-    Command Status with a non-zero status rejects the command immediately;
-    Command Status with status 0 means the command is still pending.
+    Returns (status, params) for a verdict, or None when the packet is not a
+    verdict for this opcode. Layouts (Core Spec Vol 4 Part E §7.7.14/15):
+      Command Complete: 04 0E plen | ncmd | opcode lo hi | status | params...
+      Command Status:   04 0F plen | status | ncmd | opcode lo hi
+    A Command Status with status 0 means "pending" and is not a verdict.
     """
+    if len(pkt) < 3 or pkt[0] != HCI_EVENT_PKT:
+        return None
+    evt, plen = pkt[1], pkt[2]
+    body = pkt[3:3 + plen]
+    if evt == EVT_CMD_COMPLETE and len(body) >= 4:
+        if body[1] | (body[2] << 8) == opcode:
+            return body[3], bytes(body[4:])
+    elif evt == EVT_CMD_STATUS and len(body) >= 4:
+        if body[2] | (body[3] << 8) == opcode and body[0] != 0:
+            return body[0], b""
+    return None
+
+
+def wait_complete(sock, opcode, deadline):
+    """Read events until the verdict for `opcode`; returns (status, params) or (None, None)."""
     while True:
         remain = deadline - time.monotonic()
         if remain <= 0:
             return None, None
         sock.settimeout(remain)
         try:
-            pkt = sock.recv(660)
-        except socket.timeout:
+            pkt = sock.recv(260)
+        except OSError:   # includes socket.timeout
             return None, None
-        except OSError:
-            return None, None
-        if not pkt or pkt[0] != HCI_EVENT_PKT or len(pkt) < 3:
-            continue
-        plen = pkt[1]
-        body = pkt[3:3 + plen]
-        if len(body) < 4:
-            continue
-        evt = pkt[2]
-        opcode_rx = body[1] | (body[2] << 8)
-        if opcode_rx != opcode:
-            continue
-        if evt == EVT_CMD_COMPLETE:
-            return body[3], body[4:]
-        if evt == EVT_CMD_STATUS and body[0] != 0:
-            return body[0], None
+        verdict = parse_event(pkt, opcode)
+        if verdict is not None:
+            return verdict
 
 
 def do_command(dev_id, ogf, ocf, params, timeout):
@@ -108,6 +125,7 @@ def do_command(dev_id, ogf, ocf, params, timeout):
     try:
         sock = socket.socket(socket.AF_BLUETOOTH, socket.SOCK_RAW, socket.BTPROTO_HCI)
         sock.bind((dev_id,))
+        sock.setsockopt(SOL_HCI, HCI_FILTER, CMD_EVENT_FILTER)
     except OSError as exc:
         print(f"error: cannot open raw HCI socket on hci{dev_id}: {exc}", file=sys.stderr)
         return 255
@@ -140,7 +158,8 @@ def list_conns(dev_id):
     except OSError as exc:
         print(f"error: cannot open raw HCI socket: {exc}", file=sys.stderr)
         return 255
-    buf = struct.pack("HH", 64, dev_id) + b"\x00" * (HCI_CONN_INFO_SIZE * 64)
+    max_conns = 32
+    buf = struct.pack("<HH", dev_id, max_conns) + b"\x00" * (HCI_CONN_INFO_SIZE * max_conns)
     try:
         res = fcntl.ioctl(sock.fileno(), HCIGETCONNLIST, buf)
     except OSError as exc:
@@ -148,9 +167,10 @@ def list_conns(dev_id):
         return 255
     finally:
         sock.close()
-    n = struct.unpack_from("H", res, 0)[0]
+    n = min(struct.unpack_from("<H", res, 2)[0], max_conns)
     for i in range(n):
-        handle, bdaddr, ctype, _out, state, _lm = struct.unpack_from("@H6BBBBH", res, 4 + i * HCI_CONN_INFO_SIZE)
+        handle, bdaddr, ctype, _out, state, _lm = struct.unpack_from(
+            HCI_CONN_INFO_FMT, res, 4 + i * HCI_CONN_INFO_SIZE)
         addr = ":".join(f"{b:02X}" for b in reversed(bdaddr))
         print(f"handle {handle} addr {addr} type {ctype} state {state}")
     if n == 0:
@@ -191,7 +211,7 @@ def main():
         print(f"error: OGF 0x{ogf:X} out of range (0x00-0x3F)", file=sys.stderr)
         return 2
     if not 0 <= ocf <= 0x03FF:
-        print(f"error: OGF 0x{ocf:X} out of range (0x0000-0x03FF)", file=sys.stderr)
+        print(f"error: OCF 0x{ocf:X} out of range (0x0000-0x03FF)", file=sys.stderr)
         return 2
     for p in params:
         if not 0 <= p <= 255:

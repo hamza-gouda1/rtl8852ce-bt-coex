@@ -1,0 +1,4 @@
+< HCI Command: ogf 0x05, ocf 0x0006, plen 2
+  04 00 
+> HCI Event: 0x0e plen 17
+  02 06 14 00 04 00 01 00 00 00 F8 FF FF FF FF FF 7F 

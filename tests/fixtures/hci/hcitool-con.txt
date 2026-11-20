@@ -1,0 +1,2 @@
+Connections:
+	> ACL 00:11:22:33:44:55 handle 4 state 1 lm CENTRAL AUTH ENCRYPT 
