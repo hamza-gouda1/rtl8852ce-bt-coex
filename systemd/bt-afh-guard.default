@@ -1,0 +1,22 @@
+# SPDX-License-Identifier: GPL-2.0-only
+# Example configuration for bt-afh-guard (RTL8852CE Bluetooth/Wi-Fi coexistence).
+# Copy to /etc/default/bt-afh-guard and uncomment what you change; every value
+# is validated at startup and out-of-range values fall back to the defaults.
+# Defaults live in scripts/bt-afh-guard.
+
+# Extra margin (MHz) added on each side of the occupied Wi-Fi block.
+#GUARD_MHZ=2
+
+# Seconds between checks of the Wi-Fi link state.
+#INTERVAL=5
+
+# Re-send the mask even when unchanged, this often (s): covers silent
+# controller resets. Also the cadence of live-map readback logging.
+#REFRESH=60
+
+# Seconds to keep the last mask after the 2.4 GHz link disappears before
+# sending the all-usable map (flap protection). 0 restores v1.0 behaviour.
+#HOLD_S=30
+
+# Bluetooth controller name.
+#HCI=hci0

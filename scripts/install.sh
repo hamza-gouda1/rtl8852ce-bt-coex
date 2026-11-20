@@ -21,6 +21,16 @@ if ! command -v hcitool >/dev/null 2>&1 && [ ! -x "$REPO/scripts/hci-cmd.py" ]; 
 fi
 HCI=${HCI:-hci0}
 
+# Version drift check: report what is installed vs what the repo ships.
+REPO_V=$(sed -n 's/^GUARD_VERSION="\{0,1\}\([0-9.]*\)"\{0,1\}$/\1/p' "$REPO/scripts/bt-afh-guard" | head -1)
+INSTALLED_V=$(sed -n 's/^GUARD_VERSION="\{0,1\}\([0-9.]*\)"\{0,1\}$/\1/p' /usr/local/sbin/bt-afh-guard 2>/dev/null | head -1)
+[ -n "$INSTALLED_V" ] || INSTALLED_V="?"
+if [ "$INSTALLED_V" = "?" ]; then
+    echo "[i] installed daemon has no version stamp (pre-1.1 copy) -- it will be replaced"
+elif [ "$INSTALLED_V" != "$REPO_V" ]; then
+    echo "[i] replacing bt-afh-guard $INSTALLED_V with $REPO_V"
+fi
+
 # Source the daemon for the verified sender (hci_backend / hci_send) so the
 # logic exists exactly once, in scripts/bt-afh-guard.
 # shellcheck disable=SC1091

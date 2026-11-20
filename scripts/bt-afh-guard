@@ -20,6 +20,7 @@
 # the mask when Wi-Fi leaves 2.4 GHz.
 # Optional overrides: /etc/default/bt-afh-guard (GUARD_MHZ, INTERVAL, REFRESH, HCI)
 
+GUARD_VERSION="1.1.0"
 GUARD_MHZ=2          # extra margin on each side of the Wi-Fi block
 INTERVAL=5           # seconds between checks
 REFRESH=60           # re-send even if unchanged (covers silent controller resets)
@@ -30,6 +31,35 @@ HCI=hci0
 
 last=""; last_sent=0; hold_start=0; hold_block=""; was_up=0; force=0
 log() { logger -t bt-afh-guard "$*"; }
+
+validate_config() {   # reject out-of-range values from /etc/default/bt-afh-guard: warn (stderr) and fall back to the default
+    local n
+    if ! [[ "$HCI" =~ ^hci[0-9]+$ ]]; then
+        echo "bt-afh-guard: invalid HCI='$HCI' (expected hci<N>); using hci0" >&2
+        HCI=hci0
+    fi
+    n=$GUARD_MHZ
+    if ! [[ "$n" =~ ^[0-9]+$ ]] || (( n < 0 || n > 10 )); then
+        echo "bt-afh-guard: invalid GUARD_MHZ='$n' (0-10); using 2" >&2
+        GUARD_MHZ=2
+    fi
+    n=$INTERVAL
+    if ! [[ "$n" =~ ^[0-9]+$ ]] || (( n < 1 || n > 600 )); then
+        echo "bt-afh-guard: invalid INTERVAL='$n' (1-600); using 5" >&2
+        INTERVAL=5
+    fi
+    n=$REFRESH
+    if ! [[ "$n" =~ ^[0-9]+$ ]] || (( n < 10 || n > 3600 )); then
+        echo "bt-afh-guard: invalid REFRESH='$n' (10-3600); using 60" >&2
+        REFRESH=60
+    fi
+    n=$HOLD_S
+    if ! [[ "$n" =~ ^[0-9]+$ ]] || (( n < 0 || n > 3600 )); then
+        echo "bt-afh-guard: invalid HOLD_S='$n' (0-3600); using 30" >&2
+        HOLD_S=30
+    fi
+    return 0
+}
 
 # ---------------------------------------------------------------------------
 # Pure, testable layer. These functions take explicit input (or read iw) and
@@ -214,7 +244,7 @@ list_acl_handles() {   # prints connected ACL handles, one per line; empty when 
     if [ -n "$HCI_CMD_PY" ]; then
         while IFS= read -r line; do
             if [[ "$line" == handle\ * && "$line" == *"type 1 "* ]]; then
-                line=${line#handle }; echo ${line%% *}
+                line=${line#handle }; echo "${line%% *}"
             fi
         done < <("$HCI_CMD_PY" --list-conns --hci "$HCI" 2>/dev/null)
     fi
@@ -331,8 +361,36 @@ guard_decide() {   # $1 lo MHz or "", $2 hi MHz, $3 now (epoch seconds); prints 
 
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
 
-    # --dry-run: print what would be sent and exit (no root needed)
-    if [ "${1:-}" = "--dry-run" ]; then
+    usage() {
+        cat <<USAGE
+bt-afh-guard $GUARD_VERSION — keep Bluetooth away from the active 2.4 GHz Wi-Fi channel (RTL8852CE coexistence)
+
+Usage: bt-afh-guard [MODE]
+  (no mode)   run as a daemon
+  --dry-run   print the Wi-Fi block and the mask that would be sent (no root needed)
+  --status    backend, Wi-Fi block, host mask and the live map of every connected link (root)
+  --once      run one daemon cycle and exit
+  --version   print the version
+  --help      this text
+
+Overrides: /etc/default/bt-afh-guard (GUARD_MHZ, INTERVAL, REFRESH, HOLD_S, HCI)
+USAGE
+    }
+
+    MODE=daemon
+    case "${1:-}" in
+        --version) echo "bt-afh-guard $GUARD_VERSION"; exit 0 ;;
+        --help|-h) usage; exit 0 ;;
+        --dry-run) MODE=dry-run ;;
+        --status) MODE=status ;;
+        --once) MODE=once ;;
+        "") ;;
+        *) usage >&2; exit 2 ;;
+    esac
+
+    validate_config
+
+    if [ "$MODE" = "dry-run" ]; then
         read -r lo hi <<<"$(wifi_block)"
         mask=$(build_mask "$lo" "$hi")
         usable=$(mask_usable_count "$mask")
@@ -345,8 +403,7 @@ if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
         exit 0
     fi
 
-    # --status: Wi-Fi block, host mask, backend, and each link's live map (root)
-    if [ "${1:-}" = "--status" ]; then
+    if [ "$MODE" = "status" ]; then
         hci_backend || true
         if [ -z "$HCI_BACKEND" ]; then
             echo "no verified HCI backend (scripts/hci-cmd.py or bluez hcitool needed)"
@@ -383,6 +440,7 @@ if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
                     if [ -n "$lo" ] && [ "$desired" = "$ALL_USABLE" ]; then
                         log "WARNING: the Wi-Fi block would leave fewer than 20 usable channels; sending the all-usable map instead"
                     fi
+                    # shellcheck disable=SC2086  # the mask MUST be word-split into 10 separate hex arguments
                     if hci_send "$HCI" 0x03 0x003F $desired >/dev/null; then
                         [ "$desired" != "$last" ] && log "avoiding ${lo:-none}-${hi:-none} MHz; mask: $desired"
                         last="$desired"; last_sent=$now
@@ -398,6 +456,7 @@ if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
                     hold_start=0
                     ;;
                 refresh)
+                    # shellcheck disable=SC2086  # the mask MUST be word-split into 10 separate hex arguments
                     if hci_send "$HCI" 0x03 0x003F $desired >/dev/null; then
                         last_sent=$now
                         log_live_maps "$lo" "$hi"   # refresh re-send: also read back and log the live map
@@ -407,6 +466,7 @@ if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
                     ;;
                 clear)
                     log "Wi-Fi link lost for >= $HOLD_S s; sending the all-usable map"
+                    # shellcheck disable=SC2086  # the mask MUST be word-split into 10 separate hex arguments
                     if hci_send "$HCI" 0x03 0x003F $ALL_USABLE >/dev/null; then
                         last="$ALL_USABLE"; last_sent=$now
                         hold_start=0
@@ -430,6 +490,7 @@ if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
             fi
             was_up=0
         fi
+        [ "$MODE" = "once" ] && exit 0   # --once: one cycle, no sleep
         sleep "$INTERVAL"
     done
 

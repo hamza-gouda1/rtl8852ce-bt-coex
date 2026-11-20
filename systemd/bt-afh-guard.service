@@ -1,15 +1,49 @@
 # SPDX-License-Identifier: GPL-2.0-only
+# Hardened systemd unit for bt-afh-guard (RTL8852CE Bluetooth/Wi-Fi coexistence).
+# Each sandboxing directive below is commented with what it restricts and why
+# the guard still works under it.
 [Unit]
-Description=Keep Bluetooth hopping away from the active 2.4 GHz Wi-Fi channel (RTL8852CE coex fix)
+Description=Keep Bluetooth hopping away from the active 2.4 GHz Wi-Fi channel (RTL8852CE coex)
 Documentation=https://github.com/hamza-gouda1/rtl8852ce-bt-coex
-After=bluetooth.service NetworkManager.service
-Wants=bluetooth.service
+# Order after the BT stack and network so the first cycle sees a real controller
+# and a real Wi-Fi state instead of probing both during early boot.
+After=bluetooth.service network-online.target
+Wants=bluetooth.service network-online.target
 
 [Service]
 Type=simple
 ExecStart=/usr/local/sbin/bt-afh-guard
 Restart=always
 RestartSec=3
+
+# The guard runs as root because raw HCI sockets (BTPROTO_HCI) require
+# CAP_NET_RAW, and the HCIGETCONNLIST ioctl needs CAP_NET_ADMIN. Drop every
+# other capability so a compromise of the daemon cannot touch anything else.
+CapabilityBoundingSet=CAP_NET_RAW CAP_NET_ADMIN
+AmbientCapabilities=CAP_NET_RAW CAP_NET_ADMIN
+
+# The daemon never execs other binaries with elevated rights; a setuid trick
+# or file-based privilege escalation is off the table.
+NoNewPrivileges=yes
+
+# Read-only filesystem except /run and /dev: the guard writes nothing to disk
+# (logs go to the journal via logger; /etc/default/bt-afh-guard is only read).
+ProtectSystem=strict
+# No access to /home or /root, which the guard never needs.
+ProtectHome=yes
+# Private /tmp, so a compromised daemon cannot fight over or read host temp files.
+PrivateTmp=yes
+# Kernel interfaces (/sys, /proc/sys) read-only: the guard only reads sysfs
+# (e.g. /sys/class/bluetooth) and never tunes the kernel.
+ProtectKernelTunables=yes
+# No cgroup manipulation.
+ProtectControlGroups=yes
+
+# The guard only needs three socket families:
+#   AF_BLUETOOTH - raw HCI commands and the connection-list ioctl
+#   AF_NETLINK   - iw's nl80211 queries about the Wi-Fi link state
+#   AF_UNIX      - logger's connection to /dev/log for journal logging
+RestrictAddressFamilies=AF_BLUETOOTH AF_NETLINK AF_UNIX
 
 [Install]
 WantedBy=multi-user.target

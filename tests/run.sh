@@ -273,6 +273,27 @@ export hold_start=300
 assert_eq "clear $ALL_USABLE" "$(guard_decide "" "" 300)" "HOLD_S=0: clear at the same instant"
 export HOLD_S=30
 
+# ---------------------------------------------------------------------------
+t "config validation falls back to defaults on garbage"
+# ---------------------------------------------------------------------------
+export GUARD_MHZ=999 INTERVAL=abc REFRESH=-5 HOLD_S=9999 HCI=hciX
+validate_config
+assert_eq "2" "$GUARD_MHZ" "GUARD_MHZ out of range -> default"
+assert_eq "5" "$INTERVAL" "non-numeric INTERVAL -> default"
+assert_eq "60" "$REFRESH" "negative REFRESH -> default"
+assert_eq "30" "$HOLD_S" "huge HOLD_S -> default"
+assert_eq "hci0" "$HCI" "bad HCI name -> default"
+export GUARD_MHZ=3 INTERVAL=10 REFRESH=300 HOLD_S=0 HCI=hci1
+validate_config
+assert_eq "3" "$GUARD_MHZ" "valid custom values survive validation"
+
+# ---------------------------------------------------------------------------
+t "version and help"
+# ---------------------------------------------------------------------------
+assert_eq "bt-afh-guard $GUARD_VERSION" "$(bash "$REPO/scripts/bt-afh-guard" --version)" "--version output"
+help_count=$(bash "$REPO/scripts/bt-afh-guard" --help 2>&1 | grep -c 'Usage:')
+assert_eq "1" "$help_count" "--help prints usage"
+
 # restore PATH polluted by the stub-backed tests
 PATH="$ORIG_PATH"
 
