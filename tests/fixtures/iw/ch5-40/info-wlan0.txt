@@ -1,0 +1,12 @@
+Interface wlan0
+	ifindex 3
+	wdev 0x1
+	addr ac:f2:3c:c4:f9:41
+	ssid Test
+	type managed
+	wiphy 0
+	channel 5 (2412 MHz), width: 40 MHz, center1: 2422 MHz
+	txpower 20.00 dBm
+	multicast TXQ:
+		qsz-byt	qsz-pkt	flows	drops	marks	overlmt	hashcol	tx-bytes	tx-packets
+		0	0	0	0	0	0	0	0		0

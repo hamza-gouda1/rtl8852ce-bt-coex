@@ -15,68 +15,140 @@
 # (2402 + n MHz). 1 = "unknown" (usable), 0 = "bad" (avoid). Bit 79 is reserved
 # and must be 0. At least 20 channels must stay usable.
 #
-# The daemon checks every INTERVAL seconds, follows Wi-Fi channel/width changes,
-# re-sends after controller resets, and clears the mask when Wi-Fi leaves 2.4 GHz.
+# The daemon checks every INTERVAL seconds, follows Wi-Fi channel/width changes
+# across all wireless interfaces, re-sends after controller resets, and clears
+# the mask when Wi-Fi leaves 2.4 GHz.
 # Optional overrides: /etc/default/bt-afh-guard (GUARD_MHZ, INTERVAL, REFRESH, HCI)
 
 GUARD_MHZ=2          # extra margin on each side of the Wi-Fi block
 INTERVAL=5           # seconds between checks
 REFRESH=60           # re-send even if unchanged (covers silent controller resets)
 HCI=hci0
+# shellcheck disable=SC1091  # /etc/default/bt-afh-guard only exists on installed systems
 [ -r /etc/default/bt-afh-guard ] && . /etc/default/bt-afh-guard
 
 last=""; last_sent=0
 log() { logger -t bt-afh-guard "$*"; }
 
-wifi_block() {   # prints "lo hi" (MHz) occupied by the connected 2.4 GHz Wi-Fi link, or nothing
-    local ifc info c1 w
-    for ifc in $(iw dev 2>/dev/null | awk '/Interface/{print $2}'); do
-        info=$(iw dev "$ifc" info 2>/dev/null)
-        c1=$(sed -n 's/.*center1: \([0-9]*\) MHz.*/\1/p' <<<"$info")
-        w=$(sed -n 's/.*width: \([0-9]*\) MHz.*/\1/p' <<<"$info")
-        [ -z "$c1" ] && c1=$(sed -n 's/.*channel [0-9]* (\([0-9]*\) MHz).*/\1/p' <<<"$info")
-        [ -z "$w" ] && w=20
-        if [ -n "$c1" ] && [ "$c1" -lt 2500 ]; then
-            echo $(( c1 - w/2 - GUARD_MHZ )) $(( c1 + w/2 + GUARD_MHZ )); return
-        fi
-    done
+# ---------------------------------------------------------------------------
+# Pure, testable layer. These functions take explicit input (or read iw) and
+# print results; tests/run.sh sources this file and asserts exact outputs.
+# ---------------------------------------------------------------------------
+
+iface_list() {   # print wireless interface names from `iw dev`
+    iw dev 2>/dev/null | awk '/Interface/{print $2}'
 }
 
-build_mask() {   # $1 lo MHz, $2 hi MHz (both empty = no Wi-Fi) -> 10 hex bytes, LSB first
+parse_iw_info() {   # $1 = full "iw dev <if> info" output; prints "center width" (MHz), or "" when there is no channel line
+    local info=$1 freq="" center="" width=""
+    freq=$(sed -n 's/.*channel [0-9]* (\([0-9]*\) MHz).*/\1/p' <<<"$info")
+    [ -z "$freq" ] && return 0
+    width=$(sed -n 's/.*width: \([0-9]*\) MHz.*/\1/p' <<<"$info")
+    center=$(sed -n 's/.*center1: \([0-9]*\) MHz.*/\1/p' <<<"$info")
+    # Old iw prints no width (20 MHz) and no center1 for 20 MHz links.
+    # If a wider link reports no center1 the extension channel side is unknown;
+    # fall back to the control frequency as center, which over-blocks one side
+    # (safe for coexistence, never under-blocks).
+    width=${width:-20}
+    center=${center:-$freq}
+    echo "$center $width"
+}
+
+wifi_block() {   # union of the occupied 2.4 GHz blocks of every interface (with GUARD_MHZ margin each side); prints "lo hi" MHz, or "" when no 2.4 GHz link
+    local ifc info center width lo hi
+    local glo="" ghi=""
+    for ifc in $(iface_list); do
+        info=$(iw dev "$ifc" info 2>/dev/null) || continue
+        read -r center width <<<"$(parse_iw_info "$info")"
+        [ -z "$center" ] && continue
+        (( center >= 2500 )) && continue   # 5/6 GHz links cannot collide with Bluetooth's 2.4 GHz band
+        lo=$(( center - width/2 - GUARD_MHZ ))
+        hi=$(( center + width/2 + GUARD_MHZ ))
+        if [ -z "$glo" ]; then
+            glo=$lo; ghi=$hi
+        else
+            (( lo < glo )) && glo=$lo
+            (( hi > ghi )) && ghi=$hi
+        fi
+    done
+    [ -n "$glo" ] && echo "$glo $ghi"
+}
+
+build_mask() {   # $1 lo MHz, $2 hi MHz (empty = no Wi-Fi block) -> prints 10 hex bytes, LSB first; bit 79 reserved = 0
     local -a M=(255 255 255 255 255 255 255 255 255 127)   # channels 0-78 usable, bit 79 = 0
     if [ -n "$1" ]; then
         local lo=$(( $1 - 2402 )) hi=$(( $2 - 2402 )) n
-        (( lo < 0 )) && lo=0; (( hi > 78 )) && hi=78
+        (( lo < 0 )) && lo=0
+        (( hi > 78 )) && hi=78
+        # Refuse masks that would leave fewer than 20 usable channels
+        # (invalid per spec; the controller would reject them).
         if (( 79 - (hi - lo + 1) >= 20 )); then
             for ((n=lo; n<=hi; n++)); do M[n/8]=$(( M[n/8] & ~(1<<(n%8)) )); done
         fi
     fi
-    local out="" b; for b in "${M[@]}"; do out+=" $(printf '0x%02X' "$b")"; done; echo "$out"
+    local out="" b; for b in "${M[@]}"; do out+=" $(printf '0x%02X' "$b")"; done; echo "${out# }"
 }
 
-# --dry-run: print what would be sent and exit (no root needed)
-if [ "${1:-}" = "--dry-run" ]; then
-    read -r lo hi <<<"$(wifi_block)"
-    echo "Wi-Fi block: ${lo:-none}-${hi:-none} MHz"
-    echo "HCI mask:$(build_mask "$lo" "$hi")"
-    exit 0
-fi
+mask_usable_count() {   # $1 = mask string ("0xXX ..." 10 bytes, LSB first) -> number of usable channels (bits 0-78; reserved bit 79 excluded)
+    local -a M
+    read -r -a M <<<"$1"
+    local count=0 n b
+    for ((n=0; n<79; n++)); do
+        b=${M[n/8]}
+        (( b & (1 << (n%8)) )) && count=$((count+1))
+    done
+    echo "$count"
+}
 
-while true; do
-    if hciconfig "$HCI" 2>/dev/null | grep -q 'UP RUNNING'; then
+# The all-usable classification (no Wi-Fi block): channels 0-78 usable, bit 79 = 0.
+ALL_USABLE="0xFF 0xFF 0xFF 0xFF 0xFF 0xFF 0xFF 0xFF 0xFF 0x7F"
+
+# ---------------------------------------------------------------------------
+# Main program. Guarded so tests can source this file without starting the loop.
+# ---------------------------------------------------------------------------
+
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+
+    # --dry-run: print what would be sent and exit (no root needed)
+    if [ "${1:-}" = "--dry-run" ]; then
         read -r lo hi <<<"$(wifi_block)"
         mask=$(build_mask "$lo" "$hi")
-        now=$(date +%s)
-        if [ "$mask" != "$last" ] || (( now - last_sent >= REFRESH )); then
-            if hcitool -i "$HCI" cmd 0x03 0x003F $mask >/dev/null 2>&1; then
-                [ "$mask" != "$last" ] && log "avoiding ${lo:-none}-${hi:-none} MHz; mask:$mask"
-                last="$mask"; last_sent=$now
-            else
-                log "failed to send AFH map"
-            fi
+        usable=$(mask_usable_count "$mask")
+        echo "Wi-Fi block: ${lo:-none}-${hi:-none} MHz"
+        if [ -n "$lo" ] && [ "$mask" = "$ALL_USABLE" ]; then
+            echo "WARNING: the Wi-Fi block would leave fewer than 20 usable channels;"
+            echo "         sending the all-usable map instead (cannot honor the block)"
         fi
-    else
-        last=""   # controller down: resend as soon as it comes back
+        echo "HCI mask: $mask ($usable/79 channels usable)"
+        exit 0
     fi
-    sleep "$INTERVAL"
-done
+
+    while true; do
+        if hciconfig "$HCI" 2>/dev/null | grep -q 'UP RUNNING'; then
+            read -r lo hi <<<"$(wifi_block)"
+            mask=$(build_mask "$lo" "$hi")
+            now=$(date +%s)
+            if [ "$mask" != "$last" ]; then
+                if [ -n "$lo" ] && [ "$mask" = "$ALL_USABLE" ]; then
+                    log "WARNING: the Wi-Fi block would leave fewer than 20 usable channels; sending the all-usable map instead"
+                fi
+                if hcitool -i "$HCI" cmd 0x03 0x003F $mask >/dev/null 2>&1; then
+                    log "avoiding ${lo:-none}-${hi:-none} MHz; mask:$mask"
+                    last="$mask"; last_sent=$now
+                else
+                    log "failed to send AFH map"
+                fi
+            elif (( now - last_sent >= REFRESH )); then
+                if hcitool -i "$HCI" cmd 0x03 0x003F $mask >/dev/null 2>&1; then
+                    last_sent=$now
+                else
+                    log "failed to send AFH map"
+                fi
+            fi
+        else
+            last=""   # controller down: resend as soon as it comes back
+        fi
+        sleep "$INTERVAL"
+    done
+
+fi

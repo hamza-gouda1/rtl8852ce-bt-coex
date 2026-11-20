@@ -1,0 +1,9 @@
+Interface wlan1
+	ifindex 6
+	wdev 0x1001
+	addr ac:f2:3c:c4:f9:42
+	ssid Home24
+	type managed
+	wiphy 1
+	channel 11 (2462 MHz), width: 40 MHz, center1: 2452 MHz
+	txpower 20.00 dBm

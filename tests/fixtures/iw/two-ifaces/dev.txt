@@ -1,0 +1,14 @@
+phy#0
+	Interface wlan0
+		ifindex 3
+		wdev 0x1
+		addr ac:f2:3c:c4:f9:41
+		ssid Home5G
+		type managed
+phy#1
+	Interface wlan1
+		ifindex 6
+		wdev 0x1001
+		addr ac:f2:3c:c4:f9:42
+		ssid Home24
+		type managed

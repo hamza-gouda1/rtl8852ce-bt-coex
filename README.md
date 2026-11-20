@@ -5,7 +5,7 @@
 ![Kernel](https://img.shields.io/badge/tested_kernel-7.0.13-orange)
 ![Hardware](https://img.shields.io/badge/hardware-Realtek_RTL8852CE-red)
 ![Status](https://img.shields.io/badge/status-validated_on_one_laptop-orange)
-[![shellcheck](https://github.com/hamza-gouda1/rtl8852ce-bt-coex/actions/workflows/shellcheck.yml/badge.svg)](https://github.com/hamza-gouda1/rtl8852ce-bt-coex/actions/workflows/shellcheck.yml)
+[![ci](https://github.com/hamza-gouda1/rtl8852ce-bt-coex/actions/workflows/ci.yml/badge.svg)](https://github.com/hamza-gouda1/rtl8852ce-bt-coex/actions/workflows/ci.yml)
 
 **Bluetooth audio stuttering while 2.4 GHz Wi-Fi is busy on an RTL8852CE laptop?**
 This repository documents a strongly indicated firmware coexistence problem,
