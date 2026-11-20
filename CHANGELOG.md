@@ -25,7 +25,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `--version`, `--help`, `--once`; config validation for
   `/etc/default/bt-afh-guard` (out-of-range values are rejected with a
   warning and the default applies); `systemd/bt-afh-guard.default` example.
-- Dependency-free test suite (`tests/run.sh`, 98 tests) covering the mask
+- Dependency-free test suite (`tests/run.sh` plus a Python unittest suite for `hci-cmd.py`) covering the mask
   logic against recorded iw fixtures, the verified sender (both backends via
   stubs), live-map parsing and the hold-down state machine; CI workflow
   renamed to `ci` with a tests job.
