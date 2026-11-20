@@ -73,19 +73,35 @@ All three are fixed in v1.0 (`afh-test2.sh` stays as the A/B experiment;
 
 Every 5 s the daemon:
 
-1. Finds the connected 2.4 GHz Wi-Fi link via `iw dev <if> info` and reads the
-   **center frequency and channel width**. The width matters: an HT40 link on
-   channel 11 occupies 2432–2472 MHz, not 2452–2472. v0.1 only used the 20 MHz
-   control channel.
+1. Finds the connected 2.4 GHz Wi-Fi link via `iw dev <if> info` across all
+   interfaces and reads the **center frequency and channel width**. The width
+   matters: an HT40 link on channel 11 occupies 2432–2472 MHz, not 2452–2472.
+   v0.1 only used the 20 MHz control channel.
 2. Adds a 2 MHz guard on each side and converts to BT channels
    (`n = f − 2402`).
 3. Builds the 10-byte mask (1 = usable, 0 = avoid), refusing any mask that
-   would leave fewer than 20 usable channels.
-4. Sends it with `hcitool cmd 0x03 0x003F …`:
+   would leave fewer than 20 usable channels (and warning when it does).
+4. Sends it **through a verified sender** — `scripts/hci-cmd.py` (or the
+   `hcitool` fallback, whose Command Complete dump is parsed): the daemon
+   waits for the controller's Command Complete event, so a rejected command
+   is logged with its real HCI status ("AFH set rejected: status 0x12")
+   instead of a false "sent":
    - immediately when the Wi-Fi block changes (roaming, router channel change),
-   - immediately when `hci0` comes back up (controller reset, `bluetoothd` restart, resume),
+   - immediately when `hci0` comes back up (controller reset, `bluetoothd`
+     restart, resume),
    - and every 60 s anyway, because a controller can reset silently.
-5. When Wi-Fi is off or on 5/6 GHz, it sends the all-usable map.
+5. After every successful set (and every 60 s refresh) it **reads the live
+   hop map back** per connected ACL handle
+   (`HCI_Read_AFH_Channel_Map`, OGF 0x05 / OCF 0x0006) and logs one line per
+   link: `live map handle 4: 34 ch used, 0 overlap with Wi-Fi 2430-2474 MHz`.
+   `sudo bash scripts/bt-afh-guard --status` prints the same view on demand.
+6. When the 2.4 GHz link disappears, the daemon **holds the last mask for
+   30 s** (`HOLD_S`, 0 disables) before sending the all-usable map, so a
+   flapping link no longer bounces the controller between restricted and
+   open every few seconds. If the link returns on the same block inside the
+   window, nothing is sent; a block change re-masks immediately.
+7. When Wi-Fi is off or on 5/6 GHz, it sends the all-usable map after the
+   hold-down expires.
 
 Worked example (reference laptop, router on channel 11 / 40 MHz):
 
@@ -113,10 +129,15 @@ Configuration overrides (optional) go in `/etc/default/bt-afh-guard`:
 GUARD_MHZ=2     # margin each side of the Wi-Fi block
 INTERVAL=5      # check period (s)
 REFRESH=60      # forced re-send period (s)
+HOLD_S=30       # keep the last mask after a Wi-Fi loss (0 disables the hold-down)
 HCI=hci0
 ```
 
+Invalid values are rejected with a warning and the default applies; a
+commented example ships as `systemd/bt-afh-guard.default`.
+
 Check what it would send without root: `bash scripts/bt-afh-guard --dry-run`.
+Check what the controller actually uses (root): `sudo bash scripts/bt-afh-guard --status`.
 
 ## 4. AAC: better sound *and* less airtime
 
@@ -222,7 +243,9 @@ machine:
 |---|---|---|
 | Earbuds connect but only "Headset Head Unit" (phone quality), log says `a2dp-sink profile connect failed: Device or resource busy` / `Unable to select SEP` | `bluetoothd` wedged its A2DP state, typically after PipeWire/WirePlumber was restarted mid-stream | `sudo systemctl restart bluetooth`, then reconnect (`scripts/fix-a2dp.sh` does the full sequence). Avoid restarting PipeWire while audio plays. |
 | No AAC profile after install | Plugin not loaded yet | Earbuds into the case, `sudo systemctl restart bluetooth`, take them out |
-| Is the guard working? | — | `journalctl -t bt-afh-guard` shows `avoiding A-B MHz; mask: …` at each change; `install.sh` prints the live link map |
+| Is the guard working? | — | `journalctl -t bt-afh-guard` shows `avoiding A-B MHz; mask: …` at each change plus one `live map handle N: …` line per link after every send; `sudo bash scripts/bt-afh-guard --status` prints backend, Wi-Fi block, host mask and live maps on demand; `install.sh` prints the live link map |
+| Journal shows `AFH set rejected: status 0x…` | The controller refused the classification (transport now verified) | Check the status name in the log; with `HCI=` pointing at the wrong controller the command is rejected — fix `HCI` in `/etc/default/bt-afh-guard` |
+| `live map handle N: read failed` in the journal | The read-back could not enumerate links or the read was rejected | Needs an ACL link (connect a device); enumeration uses `hcitool con` or `hci-cmd.py --list-conns` |
 | Stutter returns after a router change | Nothing needed; the guard re-sends within 5 s | Check the journal line shows the new block |
 
 ## 9. Uninstall

@@ -47,7 +47,9 @@ sudo bash scripts/install.sh
 ```
 
 Then put the earbuds in their case, run `sudo systemctl restart bluetooth`,
-and take them out again. Check it's working with `journalctl -t bt-afh-guard`.
+and take them out again. Check it's working with
+`journalctl -t bt-afh-guard`, or run `sudo bash scripts/bt-afh-guard --status`
+for the Wi-Fi block, host mask and the live hop map of every connected link.
 Remove everything with `sudo bash scripts/uninstall.sh`.
 
 ---
@@ -105,13 +107,34 @@ flowchart TD
 The measurements cover one laptop. Independent reports are needed to determine
 which other hardware and firmware combinations exhibit the same behavior.
 
+## Known issues (reference laptop, 2026-11-20 boot)
+
+- **Weak-signal beacon loss.** At −83 dBm / MCS 3 the link logged 144
+  `CTRL-EVENT-BEACON-LOSS` and 10 disconnects (reason=4,
+  `locally_generated=1`) in one boot, with `rtw89 ... timed out to flush
+  queues` spikes. The largest burst (78 events in one hour) overlapped A2DP
+  streaming — a single observation, not a correlation; the new
+  [Wi-Fi health tooling](#whats-in-the-box) exists to measure it properly.
+- **Bluetooth → Wi-Fi direction.** The repository documents Wi-Fi → Bluetooth
+  damage; whether streaming audio degrades Wi-Fi is under investigation with
+  `scripts/wifi-health-capture.sh` + `scripts/analyze-wifi-health.py`.
+- **`[RX_DCK] S1 RXDCK timeout`** in the kernel log on boots where Bluetooth
+  audio streams — the shared antenna disturbing the Wi-Fi RF calibration
+  (see [SOLUTION.md §7](docs/SOLUTION.md#7-other-things-found-on-the-reference-laptop)).
+- **Version drift.** The installed `/usr/local/sbin/bt-afh-guard` can lag the
+  repo copy; `install.sh` now prints installed vs repo version before
+  replacing, and the daemon reports itself via `--version`.
+
 ## What's in the box
 
 | Path | Contents |
 |---|---|
 | `patches/` | Two verified patches for the vanilla `rtw89` driver (7.0.13): **0001** enables the coexistence debugfs telemetry on kernels without `CONFIG_CFG80211_DEBUGFS` (liquorix et al.); **0002** adds live coex-policy tuning knobs (`/sys/module/rtw89_core/parameters/btc_policy_override`, `btc_w1_dur_ms`) |
-| `scripts/` | The full toolkit: verified module swap with auto-rollback, 10-minute correlated capture harness (HCI + traffic + coex state), policy A/B tester, **direct-AFH HCI workaround**, and a Bluetooth speaker repair kit |
-| `scripts/bt-afh-guard` + `systemd/` | **The v1.0 workaround.** A persistent daemon that keeps the BT controller's AFH map in sync with the live Wi-Fi channel and width |
+| `scripts/bt-afh-guard` + `scripts/hci-cmd.py` + `systemd/` | **The workaround (v1.1).** A hardened daemon that keeps the BT controller's AFH map in sync with the live Wi-Fi channel and width: every send is verified against the controller's Command Complete status, the live hop map is read back per link (`--status`), and a 30 s hold-down rides out Wi-Fi flaps. `hci-cmd.py` is a dependency-free verified HCI sender; `install.sh` warns on version drift |
+| `tests/` | Dependency-free bash test suite (98 tests) for the mask logic, the verified sender and the hold-down state machine, run in CI |
+| `scripts/wifi-health-capture.sh` + `scripts/analyze-wifi-health.py` | Measure the Bluetooth → Wi-Fi direction: sample link health + A2DP state every 2 s, compare beacon loss / retries / disconnects while audio runs vs suspended |
+| `scripts/afh-positive-control.sh` | Positive control for the causal claim: forces Wi-Fi overlap with the (invalid-as-workaround) confined mask to test whether overlap actually produces stalls |
+| `scripts/` | The rest of the toolkit: verified module swap with auto-rollback, 10-minute correlated capture harness (HCI + traffic + coex state), policy A/B tester, direct-AFH A/B experiment, and a Bluetooth speaker repair kit |
 | `scripts/build-aac-plugin.sh` | Builds PipeWire's AAC Bluetooth codec for your exact installed PipeWire version |
 | `scripts/install.sh` / `uninstall.sh` | One-command install and removal of the workaround |
 | `docs/` | [`SOLUTION.md`](docs/SOLUTION.md) · [`ROOT-CAUSE.md`](docs/ROOT-CAUSE.md) · [`MEASUREMENTS.md`](docs/MEASUREMENTS.md) · [`USAGE.md`](docs/USAGE.md) |
@@ -267,7 +290,11 @@ RTL8852C family.
 - [x] **Stress-load validation** of the AFH mask (Wi-Fi-only, saturated)
 - [x] **Persistent AFH programming** on channel change / reconnect (`bt-afh-guard`)
 - [x] AAC codec build for PipeWire (less airtime, better sound)
+- [x] **Verified sends** (Command Complete status parsed), **live-map readback** (`--status`), tests + CI for the mask logic (v1.1)
+- [x] **Hold-down** so Wi-Fi flaps no longer drop the mask (v1.1)
+- [x] **Bluetooth → Wi-Fi health tooling** and an **AFH positive control** to test the causal claim (v1.1)
 - [ ] Repeat the 10-minute stall capture with the guard active (numbers for MEASUREMENTS.md)
+- [ ] Run the 3-condition Wi-Fi health protocol and the AFH positive control on hardware
 - [ ] Upstream submission to linux-wireless / BlueZ
 
 ## Contributing

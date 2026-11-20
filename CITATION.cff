@@ -7,8 +7,8 @@ authors:
   - family-names: Gouda
     given-names: Hamza
     email: hraafat357@gmail.com
-version: 1.0.0
-date-released: "2026-10-23"
+version: 1.1.0
+date-released: "2026-11-20"
 license: GPL-2.0-only
 repository-code: "https://github.com/hamza-gouda1/rtl8852ce-bt-coex"
 abstract: >-
@@ -18,9 +18,12 @@ abstract: >-
   reports coex version 0, AFH never engages, ~50% of coordination mailbox
   messages are rejected), causing Bluetooth A2DP audio packet loss under
   2.4 GHz Wi-Fi traffic. Includes a direct-HCI adaptive-frequency-hopping
-  workaround and live coex policy tuning, and (v1.0) a persistent
-  AFH guard service plus a PipeWire AAC codec build that together
-  eliminate the audible stutter.
+  workaround and live coex policy tuning, and (v1.1) a persistent AFH
+  guard with verified sends, live-map readback and a hold-down against
+  Wi-Fi flapping, plus measurement tooling for the Bluetooth-to-Wi-Fi
+  direction and an AFH positive control. Claims are bounded to a
+  single-laptop validation; the controlled rerun could not isolate the
+  guard's independent effect.
 keywords:
   - linux
   - bluetooth

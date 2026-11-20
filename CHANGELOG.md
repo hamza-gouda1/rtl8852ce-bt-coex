@@ -5,7 +5,42 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-11-20
+
 ### Added
+- `scripts/bt-afh-guard`: verified sends — every command goes through
+  `scripts/hci-cmd.py` (stdlib-only raw HCI sender that waits for the
+  controller's Command Complete event and exits with its status byte) or a
+  `hcitool` fallback that parses the status from the dump; the daemon logs
+  the real HCI status on rejection.
+- `scripts/bt-afh-guard --status` (root): backend, Wi-Fi block, host mask and
+  the live AFH hop map of every connected link with its Wi-Fi overlap.
+- Live-map readback: after every successful set and refresh, each connected
+  ACL handle is read with `HCI_Read_AFH_Channel_Map` and logged as one
+  compact line (`live map handle 4: 34 ch used, 0 overlap with Wi-Fi …`).
+- Hold-down: when the 2.4 GHz link drops, the last mask is kept for `HOLD_S`
+  (default 30 s, 0 disables) instead of immediately clearing, so flapping
+  links no longer bounce the controller between restricted and open; state
+  transitions are logged, not every tick.
+- `--version`, `--help`, `--once`; config validation for
+  `/etc/default/bt-afh-guard` (out-of-range values are rejected with a
+  warning and the default applies); `systemd/bt-afh-guard.default` example.
+- Dependency-free test suite (`tests/run.sh`, 98 tests) covering the mask
+  logic against recorded iw fixtures, the verified sender (both backends via
+  stubs), live-map parsing and the hold-down state machine; CI workflow
+  renamed to `ci` with a tests job.
+- `scripts/wifi-health-capture.sh` + `scripts/analyze-wifi-health.py`: sample
+  Wi-Fi link health + A2DP transport state every 2 s and compare beacon
+  loss / retries / disconnects while audio plays vs is suspended — the
+  Bluetooth → Wi-Fi direction, previously unmeasured.
+- `scripts/afh-positive-control.sh`: three-phase positive control (open →
+  restricted → confined) that deliberately confines Bluetooth to the Wi-Fi
+  block to test whether overlap itself produces stalls — the causal test the
+  controlled rerun could not provide.
+- Hardened systemd unit (documented sandboxing: `CAP_NET_RAW`+`CAP_NET_ADMIN`
+  only, `NoNewPrivileges`, `ProtectSystem=strict`, `ProtectHome`, `PrivateTmp`,
+  `ProtectKernelTunables`, `ProtectControlGroups`,
+  `RestrictAddressFamilies=AF_BLUETOOTH AF_NETLINK AF_UNIX`).
 - Channel-map figure in the README (`docs/img/afh-channel-map.svg`), drawn
   from the measured AFH maps in `docs/MEASUREMENTS.md`.
 - shellcheck CI workflow.
@@ -20,10 +55,25 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   as an argument (or `BT_DEV`) instead of a hardcoded one.
 - `LICENSE` now holds the full GPL-2.0 text, so GitHub detects it; the
   per-folder licensing is in `LICENSES/README.md`.
+- install.sh detects the controller via `/sys/class/bluetooth/$HCI` plus a
+  verified probe (no hard `hciconfig` dependency), installs `hci-cmd.py` to
+  `/usr/local/lib/bt-afh-guard/`, and prints installed vs repo daemon
+  version, warning before replacing an older copy.
+- uninstall.sh resets the classification through the verified sender and
+  reports the actual HCI status.
 
 ### Fixed
 - shellcheck warnings in `afh-test2.sh` (unused variable), `capture-10min.sh`
   and `swap-modules.sh`.
+- `bt-afh-guard` no longer logs "sent" when the controller rejected the
+  classification (hcitool's exit status does not reflect the HCI status
+  byte).
+- Only the first wireless interface was considered; the 2.4 GHz blocks of
+  all interfaces are now unioned, and links without a `center1` field fall
+  back to the control frequency (over-blocking one side, never under-blocking).
+- A Wi-Fi block that would leave fewer than 20 usable channels now produces
+  a warning instead of a silent all-usable send.
+- SC2086 (mask word-splitting) annotated with a justified disable directive.
 
 ## [1.0.0] - 2026-10-23
 
