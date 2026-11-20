@@ -17,6 +17,13 @@ DIR="$SCRIPT_DIR/afh-test2-$(date +%H%M%S)"
 mkdir -p "$DIR"
 IFACE=wlp108s0
 
+# Route every HCI write through the shared verified sender (scripts/hci-cmd.py,
+# or the status-parsing hcitool fallback) sourced from the daemon.
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/bt-afh-guard"
+hci_backend || true
+[ -n "$HCI_BACKEND" ] || { echo "[FAIL] no verified HCI backend (scripts/hci-cmd.py or hcitool needed)"; exit 1; }
+
 echo "[*] Clearing bgscan (root ctrl socket) ..."
 NETID=$(sudo wpa_cli -i "$IFACE" list_networks 2>/dev/null | awk '/\[CURRENT\]/{print $1; exit}')
 if [ -n "${NETID:-}" ]; then
@@ -59,18 +66,32 @@ if [ -z "$HANDLE" ]; then echo "[FAIL] speaker not connected"; exit 1; fi
 H=$(printf "0x%02X 0x00" "$HANDLE")
 
 echo "[*] Link AFH map before:"
-hcitool cmd 0x05 0x0006 $H   # HCI Read AFH Channel Map
+# shellcheck disable=SC2086  # the handle bytes MUST be word-split
+hci_send "$HCI" 0x05 0x0006 $H && echo "    (status 0x00)" || echo "    (read failed: status ${HCI_STATUS:-no verdict})"
+
 echo "[*] Setting host AFH classification ..."
-hcitool cmd 0x03 0x003F $ARGS
+# shellcheck disable=SC2086  # the mask MUST be word-split into 10 separate hex arguments
+if hci_send "$HCI" 0x03 0x003F $ARGS >/dev/null; then
+    echo "[ok] classification accepted (status 0x00)"
+else
+    echo "[FAIL] classification rejected: status ${HCI_STATUS:-no verdict}"
+    exit 1
+fi
 sleep 1
 echo "[*] Link AFH map after (compare):"
-hcitool cmd 0x05 0x0006 $H   # HCI Read AFH Channel Map
+# shellcheck disable=SC2086  # the handle bytes MUST be word-split
+hci_send "$HCI" 0x05 0x0006 $H && echo "    (status 0x00)" || echo "    (read failed: status ${HCI_STATUS:-no verdict})"
 
 echo "[*] Phase A: 45 s WITH the WiFi block masked -- listen!"
 timeout 50 btmon -w "$DIR/afh-on.btmon" 2>/dev/null
 
 echo "[*] Clearing mask ..."
-hcitool cmd 0x03 0x003F 0xFF 0xFF 0xFF 0xFF 0xFF 0xFF 0xFF 0xFF 0xFF 0x7F   # all channels usable
+# shellcheck disable=SC2086  # the mask MUST be word-split into 10 separate hex arguments
+if hci_send "$HCI" 0x03 0x003F $ALL_USABLE >/dev/null; then
+    echo "[ok] mask cleared (status 0x00)"
+else
+    echo "[FAIL] clear rejected: status ${HCI_STATUS:-no verdict}"
+fi
 sleep 1
 echo "[*] Phase B: 45 s unmasked -- compare"
 timeout 50 btmon -w "$DIR/afh-off.btmon" 2>/dev/null
