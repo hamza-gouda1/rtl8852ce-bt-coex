@@ -35,6 +35,7 @@ import time
 
 HCI_MON_ACL_TX_PKT = 7   # net/bluetooth/hci_sock.c: HCI_MON_ACL_TX_PKT
 HCI_CHANNEL_MONITOR = 1
+HCI_DEV_NONE = 0xFFFF    # btmon binds the monitor channel here: global, all controllers
 AF_BLUETOOTH_LINUX = 31  # socket.AF_BLUETOOTH on Linux
 
 
@@ -76,14 +77,17 @@ def open_capture_file(path):
     return os.open(path, flags, 0o644)
 
 
-def open_monitor(dev_id):
-    """Bind the monitor channel of one controller.
+def open_monitor():
+    """Bind the global monitor channel (HCI_DEV_NONE, like btmon does).
 
-    CPython's BTPROTO_HCI bind only sets hci_dev (channel stays 0 = raw), so
-    the bind is issued through libc with a fully packed sockaddr_hci.
+    A per-device monitor bind is rejected with EBUSY; the global channel
+    carries every controller's records, and parse_record() filters by the
+    index field. CPython's BTPROTO_HCI bind only sets hci_dev (channel stays
+    0 = raw), so the bind is issued through libc with a fully packed
+    sockaddr_hci.
     """
     s = socket.socket(socket.AF_BLUETOOTH, socket.SOCK_RAW, socket.BTPROTO_HCI)
-    sockaddr = struct.pack("HHH", AF_BLUETOOTH_LINUX, dev_id, HCI_CHANNEL_MONITOR)
+    sockaddr = struct.pack("HHH", AF_BLUETOOTH_LINUX, HCI_DEV_NONE, HCI_CHANNEL_MONITOR)
     libc = ctypes.CDLL(None, use_errno=True)
     if libc.bind(s.fileno(), sockaddr, len(sockaddr)) != 0:
         err = ctypes.get_errno()
@@ -112,14 +116,10 @@ def main():
     dev_id = int(args.hci[3:])
 
     try:
-        sock = open_monitor(dev_id)
+        sock = open_monitor()
     except OSError as exc:
-        print(f"error: cannot open monitor channel on {args.hci}: {exc}", file=sys.stderr)
-        if exc.errno == 16:   # EBUSY
-            print("       the channel is held by another monitor reader - check: ps aux | grep btmon", file=sys.stderr)
-            print("       and stop it (sudo pkill -x btmon) before recording", file=sys.stderr)
-        else:
-            print("       (root required, and no other monitor reader such as btmon may be running)", file=sys.stderr)
+        print(f"error: cannot open the monitor channel: {exc}", file=sys.stderr)
+        print("       (root required; the channel binds globally via HCI_DEV_NONE, like btmon)", file=sys.stderr)
         return 1
 
     n = 0
