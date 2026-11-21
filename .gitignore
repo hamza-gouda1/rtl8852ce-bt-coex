@@ -34,3 +34,7 @@ scripts/afh-test2-*/
 
 # Python bytecode (scripts/hci-cmd.py compilation check)
 __pycache__/
+
+# ACL TX capture files (scripts/hci-acl-capture.py)
+acl-tx-*.txt
+acl-test.txt

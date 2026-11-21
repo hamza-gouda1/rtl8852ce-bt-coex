@@ -21,8 +21,8 @@ def _acl_data(handle, dlen):
     return struct.pack("<HH", (handle & 0x0FFF) | (0x2 << 12), dlen)
 
 
-def acl_tx_record(index, handle, dlen):
-    return struct.pack("<HHH", 7, index, len(_acl_data(handle, dlen))) + _acl_data(handle, dlen)
+def acl_tx_record(index, handle, dlen, opcode=7):
+    return struct.pack("<HHH", opcode, index, len(_acl_data(handle, dlen))) + _acl_data(handle, dlen)
 
 
 def acl_rx_record(index, handle, dlen):
@@ -30,11 +30,23 @@ def acl_rx_record(index, handle, dlen):
 
 
 class ParseRecord(unittest.TestCase):
-    def test_acl_tx_parsed(self):
-        self.assertEqual(mod.parse_record(acl_tx_record(0, 5, 625), 0), (5, 625))
+    def test_acl_tx_parsed_mainline_opcode(self):
+        self.assertEqual(mod.parse_record(acl_tx_record(0, 5, 625, opcode=7), 0), (5, 625))
+
+    def test_acl_tx_parsed_liquorix_opcode(self):
+        # 7.0.13-liquorix emits the pre-3.5 numbering: ACL TX = 4 (verified
+        # 2026-11-21 with scripts/hci-monitor-probe.py: 198 records/5 s).
+        self.assertEqual(mod.parse_record(acl_tx_record(0, 5, 657, opcode=4), 0), (5, 657))
+
+    def test_oversized_frame_rejected(self):
+        self.assertIsNone(mod.parse_record(acl_tx_record(0, 5, 2000, opcode=4), 0))
 
     def test_rx_opcode_ignored(self):
         self.assertIsNone(mod.parse_record(acl_rx_record(0, 5, 625), 0))
+
+    def test_sco_and_index_opcodes_ignored(self):
+        for op in (5, 9, 10, 2, 3):
+            self.assertIsNone(mod.parse_record(acl_tx_record(0, 5, 100, opcode=op), 0))
 
     def test_other_index_ignored(self):
         self.assertIsNone(mod.parse_record(acl_tx_record(1, 5, 625), 0))

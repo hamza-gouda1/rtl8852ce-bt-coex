@@ -33,7 +33,17 @@ import struct
 import sys
 import time
 
-HCI_MON_ACL_TX_PKT = 7   # net/bluetooth/hci_sock.c: HCI_MON_ACL_TX_PKT
+HCI_MON_ACL_TX_PKT = 7   # net/bluetooth/hci_sock.c: HCI_MON_ACL_TX_PKT (mainline)
+# This kernel (7.0.13-3-liquorix) emits the pre-3.5 monitor numbering,
+# verified empirically on 2026-11-21 with scripts/hci-monitor-probe.py:
+# opcode 4 carried 198 ACL TX records in 5 s (handle 5, dlen 657, ~40/s =
+# the A2DP rate), opcode 3 the matching Number-of-Completed-Packets events.
+# Accept both layouts; a mainline OPEN_INDEX (4) can inject at most one
+# bogus record per bind, which the busiest-handle logic ignores.
+ACL_TX_OPCODES = (7, 4)
+# BR/EDR ACL payloads are at most 1021 bytes; larger "frames" mean the
+# record was misparsed (e.g. a control record), so drop it.
+ACL_MAX_DLEN = 1021
 # include/uapi/linux/bluetooth/hci.h: HCI_CHANNEL_RAW=0, USER=1, MONITOR=2,
 # CONTROL=3, LOGGING=4. Channel 1 is the EXCLUSIVE user channel, which would
 # tear the controller away from bluetoothd - getting this wrong is not benign.
@@ -51,11 +61,13 @@ def parse_record(pkt, dev_id):
     if len(pkt) < 10:
         return None
     opcode, index, mlen = struct.unpack_from("<HHH", pkt, 0)
-    if opcode != HCI_MON_ACL_TX_PKT or index != dev_id or mlen < 4:
+    if opcode not in ACL_TX_OPCODES or index != dev_id or mlen < 4:
         return None
     data = pkt[6:6 + mlen]
     handle = data[0] | ((data[1] & 0x0F) << 8)
     dlen = data[2] | (data[3] << 8)
+    if dlen > ACL_MAX_DLEN:
+        return None
     return handle, dlen
 
 
