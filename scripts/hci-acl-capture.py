@@ -34,7 +34,10 @@ import sys
 import time
 
 HCI_MON_ACL_TX_PKT = 7   # net/bluetooth/hci_sock.c: HCI_MON_ACL_TX_PKT
-HCI_CHANNEL_MONITOR = 1
+# include/uapi/linux/bluetooth/hci.h: HCI_CHANNEL_RAW=0, USER=1, MONITOR=2,
+# CONTROL=3, LOGGING=4. Channel 1 is the EXCLUSIVE user channel, which would
+# tear the controller away from bluetoothd - getting this wrong is not benign.
+HCI_CHANNEL_MONITOR = 2
 HCI_DEV_NONE = 0xFFFF    # btmon binds the monitor channel here: global, all controllers
 AF_BLUETOOTH_LINUX = 31  # socket.AF_BLUETOOTH on Linux
 
