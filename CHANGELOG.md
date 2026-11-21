@@ -5,6 +5,19 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+- `scripts/analyze-stalls.sh`: scores a capture against the 488-stall
+  baseline metric (gaps > 50 ms of the busiest ACL TX handle), reading both
+  decoded-btmon text and the native recorder format; includes accumulated
+  starvation, p95 and worst gap.
+- `scripts/hci-acl-capture.py`: decoder-free ACL TX recorder on the kernel
+  monitor channel (global bind via HCI_DEV_NONE), replacing btmon traces
+  after btmon was found to abort with a glibc fortify error while decoding
+  the A2DP media stream on bluez 5.72. Handles both the mainline and the
+  pre-3.5 monitor opcode numbering (7.0.13-liquorix), validates its output
+  path (relative, under the current directory, O_NOFOLLOW), and is covered
+  by unittests for both layouts.
+
 ## [1.1.1] - 2026-11-20
 
 ### Fixed

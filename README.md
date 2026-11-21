@@ -293,7 +293,7 @@ RTL8852C family.
 - [x] **Verified sends** (Command Complete status parsed), **live-map readback** (`--status`), tests + CI for the mask logic (v1.1)
 - [x] **Hold-down** so Wi-Fi flaps no longer drop the mask (v1.1)
 - [x] **Bluetooth → Wi-Fi health tooling** and an **AFH positive control** to test the causal claim (v1.1)
-- [ ] Repeat the 10-minute stall capture with the guard active (numbers for MEASUREMENTS.md)
+- [x] **10-minute capture with the guard active** (2026-11-21): 1,099 stalls > 50 ms / 204.9 s starvation **with verified zero-overlap live maps** — overlap was not the bottleneck that night; the 488 comparison is confounded and no guard-vs-no-guard conclusion can be drawn (see [MEASUREMENTS.md](docs/MEASUREMENTS.md))
 - [ ] Run the 3-condition Wi-Fi health protocol and the AFH positive control on hardware
 - [ ] Upstream submission to linux-wireless / BlueZ
 

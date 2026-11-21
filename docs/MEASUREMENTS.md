@@ -105,6 +105,41 @@ zero Wi-Fi overlap before and after the load. This confirms that allowing
 every channel in the host command did not recreate an overlapping live map
 on this setup. The guard was restored after both runs.
 
+## Guard-active capture (2026-11-21, ~02:26–02:36)
+
+Same laptop, earbuds on AAC, guard v1.1.1 active, Wi-Fi channel 1 / 20 MHz
+(block 2400–2424 MHz), signal −66 to −77 dBm across the session. This boot
+had degraded radio conditions (144 `CTRL-EVENT-BEACON-LOSS`, 10 disconnects,
+recurring `[RX_DCK] S1 RXDCK timeout` in the kernel log). Recorded with
+`scripts/hci-acl-capture.py` (decoder-free monitor-channel recorder; btmon
+aborts on this stream — see the notes below the rerun section).
+
+| Metric (600 s A2DP playback, guard active) | Value |
+|---|---:|
+| TX ACL packets | 23,142 (~38.6/s; healthy AAC is ~46/s) |
+| Stalls > 50 ms | **1,099** (4.7% of gaps) |
+| Accumulated starvation | **204.9 s (34.2% of wall time)** |
+| p95 / worst gap | 614.1 ms / 1,988.1 ms |
+| Live map (verified every 60 s) | 52 ch used, **0 overlap** with Wi-Fi 2400–2424 |
+| Guard rejects / flap cycling | 0 |
+
+The live hop map had **zero Wi-Fi overlap throughout the window** — the
+mechanism the guard addresses was not in play, yet the stream starved for a
+third of the wall time, with stalls clustered (ten bursts, largest 276 stalls
+over ~95 s) and a lower packet rate than a healthy AAC stream.
+
+Reading:
+
+- With zero overlap verified, this run **bounds the guard's expected benefit
+  on this setup**: avoiding the Wi-Fi block was not the limiting factor that
+  night. It does not indict the guard either — with zero overlap the
+  restricted and open classifications are near-equivalent by design, so
+  these stalls would presumably have occurred either way.
+- The comparison to the 488-stall baseline is **confounded** (codec SBC-XQ vs
+  AAC, night, signal, radio state) and carries no guard-vs-no-guard meaning.
+  The clean causal comparison is same-night paired: guard on vs guard off
+  with everything else identical; it has not been run yet.
+
 ## Interpretation
 
 See `ROOT-CAUSE.md`. Raw telemetry: `data/coex_state-121snapshots.log.gz`
