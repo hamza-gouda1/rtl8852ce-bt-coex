@@ -18,8 +18,8 @@ in the recorded single-laptop validation with Wi-Fi as the only network link.
 
 The later controlled SBC rerun could not isolate the workaround's effect.
 Both host classifications resulted in live Bluetooth maps with zero measured
-Wi-Fi overlap. The rerun establishes neither a causal benefit from the guard
-nor compatibility across RTL8852CE laptops. Read the [measurements and experimental
+Wi-Fi overlap. Validation currently covers one laptop. A later guard-active capture on
+the same laptop still recorded stalls with zero measured overlap. Read the [measurements and experimental
 limits](docs/MEASUREMENTS.md#controlled-sbc-rerun-2026-11-08) alongside the
 [workaround instructions](docs/SOLUTION.md).
 
@@ -64,11 +64,11 @@ family) and:
 - Every power-save tweak and driver reinstall changed nothing
 - Windows on the same hardware played the same audio clean
 
-The 30-second confirmation is one command after the instrumented driver is
-loaded: `sudo cat /sys/kernel/debug/rtw89/btc_info` — if you see
-`BT_FW_coex:0` and an empty `afh_map`, you have the same gap this repository
-documents. Post your dump (see [Contributing](CONTRIBUTING.md)) — each one
-maps the gap on another hardware variant.
+Read `sudo cat /sys/kernel/debug/rtw89/btc_info` once the instrumented
+driver is loaded. `BT_FW_coex:0` and an empty `afh_map` match the Wi-Fi-side
+reports from the reference laptop. An HCI read is needed to measure the live
+Bluetooth link map. See [Contributing](CONTRIBUTING.md) for details on sharing
+a capture.
 
 ## Results at a glance
 

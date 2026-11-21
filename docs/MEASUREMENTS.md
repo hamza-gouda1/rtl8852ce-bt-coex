@@ -130,11 +130,10 @@ over ~95 s) and a lower packet rate than a healthy AAC stream.
 
 Reading:
 
-- With zero overlap verified, this run **bounds the guard's expected benefit
-  on this setup**: avoiding the Wi-Fi block was not the limiting factor that
-  night. It does not indict the guard either — with zero overlap the
-  restricted and open classifications are near-equivalent by design, so
-  these stalls would presumably have occurred either way.
+- The guard-active capture shows that substantial stalls can occur while
+  the measured live channel map has zero Wi-Fi overlap. The effect of the
+  guard on that session remains unmeasured because there was no paired
+  capture with the guard disabled.
 - The comparison to the 488-stall baseline is **confounded** (codec SBC-XQ vs
   AAC, night, signal, radio state) and carries no guard-vs-no-guard meaning.
   The clean causal comparison is same-night paired: guard on vs guard off
